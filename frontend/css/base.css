@@ -1,0 +1,81 @@
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #06060f;
+  --bg-alt: #0a0a18;
+  --surface: rgba(255,255,255,0.03);
+  --surface-hover: rgba(255,255,255,0.06);
+  --border: rgba(255,255,255,0.06);
+  --border-focus: rgba(99,102,241,0.4);
+
+  --text-1: #e8e8f0;
+  --text-2: #8888aa;
+  --text-3: #555570;
+
+  --accent: #6366f1;
+  --accent-bg: rgba(99,102,241,0.12);
+  --accent-hover: rgba(99,102,241,0.22);
+
+  --success: #34d399;
+  --success-bg: rgba(52,211,153,0.12);
+  --danger: #f87171;
+  --danger-bg: rgba(248,113,113,0.12);
+  --warning: #fbbf24;
+  --warning-bg: rgba(251,191,36,0.12);
+
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+
+  --font-xs: 0.65rem;
+  --font-sm: 0.75rem;
+  --font-md: 0.9rem;
+  --font-lg: 1.1rem;
+  --font-xl: 1.3rem;
+}
+
+html { font-size: 15px; -webkit-font-smoothing: antialiased; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text-1);
+  min-height: 100vh;
+  overflow-x: hidden;
+  line-height: 1.5;
+}
+
+::selection { background: var(--accent); color: #fff; }
+
+input, textarea, select, button { font-family: inherit; }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--text-3); border-radius: 2px; }
+
+.btn {
+  background: var(--accent-bg);
+  border: 1px solid rgba(99,102,241,0.15);
+  color: var(--accent);
+  font-size: var(--font-sm);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  padding: 10px var(--space-md);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn:hover { background: var(--accent-hover); }
+.btn:active { transform: scale(0.98); }
+.btn-small { font-size: var(--font-xs); padding: 6px 12px; }
+.btn-ghost { background: transparent; border-color: var(--border); color: var(--text-3); }
+.btn-ghost:hover { background: var(--surface); color: var(--text-2); }
+.btn-icon { background: transparent; border: none; color: var(--text-3); font-size: var(--font-md); padding: 6px 10px; cursor: pointer; border-radius: var(--radius-xs); }
+.btn-icon:hover { background: var(--surface); color: var(--text-2); }

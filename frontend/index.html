@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#06060f">
+  <title>КУРАТОР v3</title>
+  <link rel="stylesheet" href="/css/base.css?v=4">
+  <link rel="stylesheet" href="/css/layout.css?v=4">
+  <link rel="stylesheet" href="/css/notes.css?v=4">
+  <link rel="stylesheet" href="/css/tasks.css?v=4">
+  <link rel="stylesheet" href="/css/dreams.css?v=4">
+  <link rel="stylesheet" href="/css/chat.css?v=4">
+  <link rel="stylesheet" href="/css/patterns.css?v=4">
+  <link rel="stylesheet" href="/css/animations.css?v=4">
+  <link rel="stylesheet" href="/css/mobile.css?v=4">
+</head>
+<body>
+
+  <!-- Mobile Header -->
+  <header class="mobile-header" id="mobileHeader" style="display:none">
+    <button class="mobile-hamburger" id="mobileHamburger">≡</button>
+    <div style="text-align:center">
+      <div class="mobile-header-title" id="mobileHeaderTitle">ЗАМЕТКИ</div>
+      <div class="mobile-header-date" id="mobileHeaderDate">Сегодня</div>
+    </div>
+    <div class="mobile-header-right"></div>
+  </header>
+
+  <!-- Mobile Drawer Overlay -->
+  <div class="mobile-drawer-overlay" id="drawerOverlay"></div>
+
+  <!-- Mobile Drawer -->
+  <div class="mobile-drawer" id="mobileDrawer">
+    <div class="drawer-header">
+      <span class="drawer-logo">КУРАТОР</span>
+      <span class="drawer-version">v3</span>
+    </div>
+
+    <div class="drawer-section">
+      <div class="drawer-section-title">календарь</div>
+      <div class="mobile-calendar">
+        <div class="calendar">
+          <div class="cal-header">
+            <button class="cal-nav" data-dir="-1">&#8249;</button>
+            <span class="cal-title" id="calMonthMobile"></span>
+            <button class="cal-nav" data-dir="1">&#8250;</button>
+          </div>
+          <div class="cal-weekdays">
+            <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
+          </div>
+          <div class="cal-days" id="calDaysMobile"></div>
+        </div>
+      </div>
+      <button class="drawer-btn btn-today-mobile" style="margin-top:8px">
+        <span class="drawer-btn-icon">•</span> сегодня
+      </button>
+    </div>
+
+    <div class="drawer-section">
+      <div class="drawer-section-title">инструменты</div>
+      <button class="drawer-btn btn-daily-summary-mobile">
+        <span class="drawer-btn-icon">+</span> итог дня
+      </button>
+      <button class="drawer-btn btn-backup-mobile">
+        <span class="drawer-btn-icon">↓</span> бекап
+      </button>
+    </div>
+
+    <div class="drawer-user" id="sidebarUser"></div>
+  </div>
+
+  <!-- Mobile Bottom Bar -->
+  <nav class="mobile-bottom-bar" id="mobileBottomBar" style="display:none">
+    <button class="mobile-tab active" data-page="notes">
+      <span class="mobile-tab-icon">✎</span>
+      <span>Заметки</span>
+    </button>
+    <button class="mobile-tab" data-page="tasks">
+      <span class="mobile-tab-icon">☐</span>
+      <span>Задачи</span>
+    </button>
+    <button class="mobile-tab" data-page="dreams">
+      <span class="mobile-tab-icon">☽</span>
+      <span>Сон</span>
+    </button>
+    <button class="mobile-tab" data-page="chat">
+      <span class="mobile-tab-icon">◇</span>
+      <span>Куратор</span>
+    </button>
+    <button class="mobile-tab" data-page="patterns">
+      <span class="mobile-tab-icon">✦</span>
+      <span>Паттерны</span>
+    </button>
+  </nav>
+
+  <!-- Auth -->
+  <div class="auth-overlay" id="authOverlay" style="display:none">
+    <div class="auth-box">
+      <h1 class="auth-logo">КУРАТОР</h1>
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-mode="login">Вход</button>
+        <button class="auth-tab" data-mode="register">Регистрация</button>
+      </div>
+      <div class="auth-form">
+        <div class="input-group">
+          <input type="text" id="authUsername" placeholder="имя" autocomplete="off">
+        </div>
+        <div class="input-group">
+          <input type="password" id="authPassword" placeholder="пароль" autocomplete="off">
+        </div>
+        <div class="auth-error" id="authError"></div>
+        <button class="btn" id="authLoginBtn">ВОЙТИ</button>
+        <button class="btn" id="authRegisterBtn" style="display:none">СОЗДАТЬ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- App -->
+  <div class="app-layout" id="appLayout" style="display:none">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <span class="sidebar-title" id="logoBtn">КУРАТОР</span>
+        <span class="sidebar-version">v3</span>
+      </div>
+
+      <nav class="nav-section">
+        <button class="nav-btn active" data-page="notes">
+          <span class="nav-icon">&#9998;</span> Заметки
+        </button>
+        <button class="nav-btn" data-page="tasks">
+          <span class="nav-icon">&#9744;</span> Задачи
+        </button>
+        <button class="nav-btn" data-page="dreams">
+          <span class="nav-icon">&#127769;</span> Сон
+        </button>
+        <button class="nav-btn" data-page="chat">
+          <span class="nav-icon">&#9671;</span> Куратор
+        </button>
+        <button class="nav-btn" data-page="patterns">
+          <span class="nav-icon">&#10022;</span> Паттерны
+        </button>
+      </nav>
+
+      <button class="btn btn-small" id="btnToday">Сегодня</button>
+
+      <div class="calendar">
+        <div class="cal-header">
+          <button class="cal-nav" data-dir="-1">&#8249;</button>
+          <span class="cal-title" id="calMonth"></span>
+          <button class="cal-nav" data-dir="1">&#8250;</button>
+        </div>
+        <div class="cal-weekdays">
+          <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
+        </div>
+        <div class="cal-days" id="calDays"></div>
+      </div>
+
+      <div class="sidebar-footer">
+        <button class="btn btn-small btn-ghost" id="btnDailySummary" title="итог дня">&#10022; итог дня</button>
+        <button class="btn btn-small btn-ghost" id="btnBackup">&#8681; бекап</button>
+        <span class="sidebar-user" id="sidebarUser"></span>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="page-header">
+        <div class="page-title" id="pageTitle"></div>
+        <div class="page-subtitle" id="pageSubtitle"></div>
+      </div>
+
+      <!-- Notes -->
+      <div id="notesSection">
+        <div class="note-input-wrapper">
+          <textarea class="note-input" id="noteInput" placeholder="запиши мысль..." rows="1"></textarea>
+          <div class="note-input-footer">
+            <div class="note-input-left">
+              <button class="voice-btn" id="voiceBtn" title="голос">mic</button>
+              <span class="char-count" id="charCount">0</span>
+            </div>
+            <button class="btn btn-small" id="saveBtn">СОХРАНИТЬ</button>
+          </div>
+        </div>
+        <div class="input-hint">Enter — сохранить · Shift+Enter — новая строка</div>
+        <div class="ai-status" id="aiStatus">
+          <div class="ai-dot"></div>
+          анализирую...
+        </div>
+        <div class="notes-section" id="notesList"></div>
+        <div class="empty-state" id="emptyState">
+          <div class="empty-icon">&#9671;</div>
+          <div class="empty-text">напиши первую заметку</div>
+        </div>
+        <div class="daily-summary" id="dailySummary" style="display:none"></div>
+      </div>
+
+      <!-- Tasks -->
+      <div id="tasksSection" style="display:none">
+        <button class="btn btn-small" id="addTaskBtn" style="margin-bottom:16px">+ Задача</button>
+        <div class="task-form" id="taskForm">
+          <div class="task-form-row">
+            <input type="text" id="taskTitle" placeholder="название">
+            <input type="date" id="taskDate">
+            <input type="time" id="taskTime">
+            <select id="taskPriority">
+              <option value="0">обычный</option>
+              <option value="1">важный</option>
+              <option value="2">срочный</option>
+            </select>
+          </div>
+          <div class="task-form-row">
+            <button class="btn btn-small" id="taskFormSubmit">создать</button>
+          </div>
+        </div>
+        <div id="tasksList"></div>
+      </div>
+
+      <!-- Dreams -->
+      <div id="dreamsSection" style="display:none">
+        <div class="dream-mode-toggle">
+          <button class="dream-mode active" data-mode="night">&#127769; перед сном</button>
+          <button class="dream-mode" data-mode="morning">&#9728; утро</button>
+        </div>
+
+        <div class="dream-panel" id="dreamNightPanel">
+          <div class="dream-prompt">что остаётся с тобой сегодня?</div>
+          <textarea class="dream-input" id="dreamNightInput" placeholder="мысли, образы, чувства..." rows="4"></textarea>
+          <div class="dream-emotion">
+            <span class="dream-emotion-label">эмоция:</span>
+            <input type="range" class="dream-slider" id="dreamEmotionSlider" min="-100" max="100" value="0">
+            <span class="dream-emotion-value" id="dreamEmotionValue">нейтрально</span>
+          </div>
+          <div class="dream-meta">
+            <label class="dream-meta-label">время засыпания</label>
+            <input type="time" id="dreamSleepTime">
+          </div>
+          <button class="btn dream-submit" id="dreamNightSubmit">доброй ночи</button>
+        </div>
+
+        <div class="dream-panel" id="dreamMorningPanel" style="display:none">
+          <div class="dream-prompt">что ты помнишь?</div>
+          <textarea class="dream-input" id="dreamMorningInput" placeholder="фрагменты, образы, чувства..." rows="4"></textarea>
+          <div class="dream-quality">
+            <span class="dream-emotion-label">качество сна:</span>
+            <div class="dream-stars" id="dreamStars">
+              <span class="dream-star" data-q="1">&#9734;</span>
+              <span class="dream-star" data-q="2">&#9734;</span>
+              <span class="dream-star" data-q="3">&#9734;</span>
+              <span class="dream-star" data-q="4">&#9734;</span>
+              <span class="dream-star" data-q="5">&#9734;</span>
+            </div>
+          </div>
+          <div class="dream-meta">
+            <label class="dream-meta-label">пробуждение</label>
+            <input type="time" id="dreamWakeTime">
+          </div>
+          <button class="btn dream-submit" id="dreamMorningSubmit">начать день</button>
+        </div>
+
+        <div class="dream-insight" id="dreamInsight" style="display:none"></div>
+        <div class="dream-history" id="dreamHistory"></div>
+      </div>
+
+      <!-- Chat -->
+      <div class="chat-section" id="chatSection">
+        <div class="chat-messages" id="chatMessages">
+          <div class="chat-msg ai">привет. я куратор v3 — помогу структурировать мысли, найти связи, предложить инсайты. о чём думаешь?</div>
+        </div>
+        <div class="chat-input-row">
+          <button class="btn btn-icon chat-back-btn" id="chatBackBtn" title="назад">&#8592;</button>
+          <button class="btn btn-icon" id="archiveToggle" title="архив">&#128218;</button>
+          <input type="text" class="chat-input" id="chatInput" placeholder="напиши сообщение...">
+          <button class="btn" id="chatSend">&#10148;</button>
+        </div>
+      </div>
+
+      <!-- Archive -->
+      <div class="archive-panel" id="archivePanel" style="display:none">
+        <div class="archive-header">
+          <button class="btn btn-icon" id="archiveBack">&#8592;</button>
+          <h3>история диалогов</h3>
+          <input type="text" class="archive-search" id="archiveSearch" placeholder="поиск...">
+        </div>
+        <div class="archive-content" id="archiveContent">
+          <div class="archive-list" id="archiveList"></div>
+          <div class="archive-view" id="archiveView" style="display:none"></div>
+          <div class="archive-results" id="archiveResults" style="display:none"></div>
+        </div>
+      </div>
+
+      <!-- Patterns -->
+      <div id="patternsSection" style="display:none">
+        <div class="patterns-header">
+          <div class="patterns-title">паттерны</div>
+          <select class="patterns-period" id="patternsPeriod">
+            <option value="7">7 дней</option>
+            <option value="14">14 дней</option>
+            <option value="30" selected>30 дней</option>
+          </select>
+        </div>
+        <div class="patterns-timeline" id="patternsTimeline"></div>
+        <div class="patterns-stats" id="patternsStats"></div>
+        <div class="patterns-insight" id="patternsInsight"></div>
+      </div>
+
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="selection-toolbar" id="selectionToolbar" style="display:none">
+    <button class="sel-btn" id="selAsk" title="уточнить">
+      <span class="sel-icon">&#10024;</span> уточнить
+    </button>
+    <button class="sel-btn sel-btn-accent" id="selSave" title="сохранить">
+      <span class="sel-icon">&#9829;</span> сохранить
+    </button>
+  </div>
+
+  <script src="/js/app.js?v=4"></script>
+</body>
+</html>

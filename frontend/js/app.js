@@ -1,0 +1,904 @@
+/* ═══════════════════════════════════════════
+   КУРАТОР v3 — JavaScript
+   Modular, clean, intentional
+   ═══════════════════════════════════════════ */
+
+const API = '/api';
+const RU_MONTHS = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+const RU_MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+const RU_DAYS = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+
+// ═══ State ═══
+let token = localStorage.getItem('curator_v3_token');
+let currentUser = null;
+let selectedDate = todayStr();
+let calYear, calMonth;
+let currentPage = 'notes';
+let dreamMode = 'night';
+let dreamQuality = 0;
+let isMobile = () => window.innerWidth <= 800;
+let drawerOpen = false;
+
+// ═══ Utils ═══
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function toast(msg) { const el = $('#toast'); el.textContent = msg; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2000); }
+function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+
+// ═══ API ═══
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(API + path, opts);
+  if (r.status === 401) { logout(); throw new Error('unauthorized'); }
+  if (!r.ok) { const err = await r.json().catch(() => ({ detail: 'ошибка' })); throw new Error(err.detail || 'ошибка'); }
+  return r.json();
+}
+
+// ═══ Auth ═══
+function initAuth() {
+  if (token) {
+    api('GET', '/me').then(u => { currentUser = u.user; startApp(); }).catch(() => {
+      token = null; localStorage.removeItem('curator_v3_token'); showAuth();
+    });
+  } else { showAuth(); }
+}
+function showAuth() { $('#authOverlay').style.display = 'flex'; $('#appLayout').style.display = 'none'; }
+function startApp() { $('#authOverlay').style.display = 'none'; $('#appLayout').style.display = 'flex'; if (isMobile()) { $('#mobileHeader').style.display = 'flex'; $('#mobileBottomBar').style.display = 'flex'; } $('#sidebarUser').textContent = currentUser; initCalendar(); renderPageTitle(); loadPageData(); }
+function logout() { token = null; currentUser = null; localStorage.removeItem('curator_v3_token'); showAuth(); }
+
+async function handleAuth(mode) {
+  const username = $('#authUsername').value.trim();
+  const password = $('#authPassword').value.trim();
+  const errEl = $('#authError');
+  if (!username || !password) { errEl.textContent = 'заполни все поля'; return; }
+  try {
+    const data = await api('POST', '/' + mode, { username, password });
+    token = data.token; currentUser = data.user;
+    localStorage.setItem('curator_v3_token', token);
+    startApp();
+  } catch (e) { errEl.textContent = e.message || 'ошибка'; }
+}
+
+// ═══ Navigation ═══
+function navigateTo(page) {
+  currentPage = page;
+  $$('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === page));
+  $$('.mobile-tab').forEach(b => b.classList.toggle('active', b.dataset.page === page));
+  loadPageData();
+  updateMobileHeader();
+  if (isMobile() && page !== 'chat') {
+    $('#mobileHeader').style.display = 'flex';
+    $('#mobileBottomBar').style.display = 'flex';
+  }
+  if (drawerOpen) closeDrawer();
+}
+
+function loadPageData() {
+  switch (currentPage) {
+    case 'notes': loadNotes(); break;
+    case 'tasks': loadTasks(); break;
+    case 'dreams': loadDreams(); break;
+    case 'chat': showChat(); break;
+    case 'patterns': loadPatterns(); break;
+  }
+  renderPageTitle();
+}
+
+// ═══ Calendar ═══
+function initCalendar() { const n = new Date(); calYear = n.getFullYear(); calMonth = n.getMonth(); renderCalendar(); }
+
+function renderCalendar() {
+  const monthLabel = RU_MONTHS[calMonth] + ' ' + calYear;
+  const calMonthEl = $('#calMonth');
+  const calMonthMobileEl = $('#calMonthMobile');
+  if (calMonthEl) calMonthEl.textContent = monthLabel;
+  if (calMonthMobileEl) calMonthMobileEl.textContent = monthLabel;
+
+  const first = new Date(calYear, calMonth, 1);
+  const last = new Date(calYear, calMonth + 1, 0);
+  let startDay = first.getDay() - 1; if (startDay < 0) startDay = 6;
+  let html = '';
+  for (let i = 0; i < startDay; i++) { const d = new Date(calYear, calMonth, -startDay+i+1); html += `<div class="cal-day other">${d.getDate()}</div>`; }
+  for (let d = 1; d <= last.getDate(); d++) {
+    const ds = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    const cls = ['cal-day'];
+    if (ds === todayStr()) cls.push('today');
+    if (ds === selectedDate) cls.push('selected');
+    html += `<div class="${cls.join(' ')}" data-date="${ds}">${d}</div>`;
+  }
+  const rem = 7 - ((startDay + last.getDate()) % 7);
+  if (rem < 7) for (let i = 1; i <= rem; i++) html += `<div class="cal-day other">${i}</div>`;
+
+  const calDaysEl = $('#calDays');
+  const calDaysMobileEl = $('#calDaysMobile');
+  if (calDaysEl) calDaysEl.innerHTML = html;
+  if (calDaysMobileEl) calDaysMobileEl.innerHTML = html;
+
+  loadDateMarkers();
+}
+
+async function loadDateMarkers() {
+  try {
+    const dates = await api('GET', '/notes/dates');
+    dates.forEach(d => {
+      const els = document.querySelectorAll(`.cal-day[data-date="${d.date}"]`);
+      els.forEach(el => el.classList.add('has-notes'));
+    });
+  } catch (e) {}
+}
+
+function calNav(dir) { calMonth += dir; if (calMonth > 11) { calMonth = 0; calYear++; } if (calMonth < 0) { calMonth = 11; calYear--; } renderCalendar(); }
+function selectDate(ds) { selectedDate = ds; renderCalendar(); renderPageTitle(); loadPageData(); if (isMobile() && drawerOpen) closeDrawer(); }
+function goToday() { selectedDate = todayStr(); const n = new Date(); calYear = n.getFullYear(); calMonth = n.getMonth(); renderCalendar(); renderPageTitle(); loadPageData(); if (isMobile() && drawerOpen) closeDrawer(); }
+
+function renderPageTitle() {
+  const d = new Date(selectedDate + 'T12:00:00');
+  const today = selectedDate === todayStr();
+  const titles = { notes: 'Заметки', tasks: 'Задачи', dreams: 'Сон', chat: 'Куратор', patterns: 'Паттерны' };
+  $('#pageTitle').textContent = titles[currentPage] || '';
+  if (currentPage === 'notes' || currentPage === 'tasks') {
+    $('#pageSubtitle').textContent = today ? 'Сегодня' : d.getDate() + ' ' + RU_MONTHS_GEN[d.getMonth()] + ', ' + RU_DAYS[d.getDay()];
+  } else {
+    $('#pageSubtitle').textContent = today ? RU_DAYS[d.getDay()] : d.getDate() + ' ' + RU_MONTHS_GEN[d.getMonth()];
+  }
+  $('#btnToday').classList.toggle('active', today);
+  updateMobileHeader();
+}
+
+function updateMobileHeader() {
+  if (!isMobile()) return;
+  const d = new Date(selectedDate + 'T12:00:00');
+  const today = selectedDate === todayStr();
+  const titles = { notes: 'ЗАМЕТКИ', tasks: 'ЗАДАЧИ', dreams: 'СОН', chat: 'КУРАТОР', patterns: 'ПАТТЕРНЫ' };
+  const el = $('#mobileHeaderTitle');
+  if (el) el.textContent = titles[currentPage] || '';
+  const dateEl = $('#mobileHeaderDate');
+  if (dateEl) {
+    dateEl.textContent = today ? 'Сегодня' : d.getDate() + ' ' + RU_MONTHS_GEN[d.getMonth()];
+  }
+}
+
+// ═══ Notes ═══
+async function loadNotes() {
+  hideAllSections(); $('#notesSection').style.display = 'block';
+  try {
+    const notes = await api('GET', '/notes?date=' + selectedDate);
+    if (!notes.length) { $('#notesList').innerHTML = ''; $('#emptyState').style.display = 'block'; return; }
+    $('#emptyState').style.display = 'none';
+    const groups = clusterNotes(notes);
+    let html = '';
+    for (const [title, items] of Object.entries(groups)) {
+      html += `<div class="note-group"><div class="group-header"><span class="group-label">${esc(title)}</span><span class="group-count">${items.length}</span><div class="group-line"></div></div><div class="notes-grid">`;
+      for (const note of items) {
+        const t = new Date(note.created_at);
+        const time = String(t.getHours()).padStart(2,'0') + ':' + String(t.getMinutes()).padStart(2,'0');
+        let aiHtml = '';
+        if (note.ai_summary || note.ai_category) {
+          const sent = note.ai_sentiment;
+          const sentLabel = sent > 0.3 ? 'светлое' : sent < -0.3 ? 'тёмное' : '';
+          aiHtml = `<div class="note-ai">
+            ${note.ai_category ? `<span class="note-ai-category">${esc(note.ai_category)}</span>` : ''}
+            ${note.ai_summary ? `<span class="note-ai-summary">${esc(note.ai_summary)}</span>` : ''}
+            ${sentLabel ? `<span class="note-ai-sentiment">${sentLabel}</span>` : ''}
+          </div>`;
+        }
+        let threadHtml = '';
+        if (note.thread_id) {
+          threadHtml = `<div class="note-thread" data-thread="${esc(note.thread_id)}">нить: ${esc(note.thread_id.slice(0,8))}</div>`;
+        }
+        html += `<div class="note-card ${note.is_favorited ? 'favorited' : ''}" data-note-id="${note.id}">
+          <div class="note-content" data-note-text="${esc(note.content)}">${esc(note.content)}</div>
+          ${threadHtml}${aiHtml}
+          <div class="note-actions">
+            <button class="note-action-btn" data-edit-note="${note.id}" title="редактировать">&#9998;</button>
+            <button class="note-action-btn" data-discuss-note="${note.id}" data-discuss-text="${esc(note.content)}" title="обсудить с куратором">&#9671;</button>
+          </div>
+          <div class="note-meta">
+            <button class="note-fav" data-fav-note="${note.id}" title="в избранное">${note.is_favorited ? '&#9733;' : '&#9734;'}</button>
+            <span class="note-time">${time}</span>
+            ${note.mood ? `<span class="note-mood">${esc(note.mood)}</span>` : ''}
+            <button class="note-delete" data-id="${note.id}">&#10005;</button>
+          </div>
+        </div>`;
+      }
+      html += '</div></div>';
+    }
+    $('#notesList').innerHTML = html;
+  } catch (e) {
+    $('#notesList').innerHTML = '<div class="empty-state"><div class="empty-icon">&#9888;</div><div class="empty-text">ошибка загрузки</div></div>';
+  }
+}
+
+function clusterNotes(notes) {
+  if (notes.length <= 1) return notes.length ? { 'Заметки': notes } : {};
+  const groups = {};
+  for (const note of notes) { const cat = note.ai_category || 'Другое'; if (!groups[cat]) groups[cat] = []; groups[cat].push(note); }
+  return Object.fromEntries(Object.entries(groups).sort((a, b) => b[1].length - a[1].length));
+}
+
+async function saveNote() {
+  const input = $('#noteInput');
+  const content = input.value.trim();
+  if (!content) return;
+  const saveBtn = $('#saveBtn'); const aiStatus = $('#aiStatus');
+  saveBtn.textContent = '...'; saveBtn.disabled = true; aiStatus.classList.add('active');
+  try {
+    const result = await api('POST', '/notes', { content, note_date: selectedDate, tags: [], mood: '' });
+    input.value = ''; autoResize(); updateCharCount();
+    toast('сохранено');
+    await loadNotes(); loadDateMarkers();
+  } catch (e) { toast('ошибка сохранения'); }
+  saveBtn.textContent = 'СОХРАНИТЬ'; saveBtn.disabled = false; aiStatus.classList.remove('active');
+}
+
+async function toggleNoteFavorite(id) { try { const r = await api('POST', '/notes/' + id + '/favorite'); toast(r.is_favorited ? 'в избранном' : 'убрано'); await loadNotes(); } catch (e) { toast('ошибка'); } }
+async function deleteNote(id) { try { await api('DELETE', '/notes/' + id); toast('удалено'); await loadNotes(); } catch (e) { toast('ошибка'); } }
+
+// ═══ Edit Note ═══
+let editingNoteId = null;
+
+function startEditNote(id) {
+  const card = document.querySelector(`.note-card[data-note-id="${id}"]`);
+  if (!card) return;
+  const contentEl = card.querySelector('.note-content');
+  const oldText = contentEl.dataset.noteText;
+  editingNoteId = id;
+
+  contentEl.outerHTML = `<textarea class="note-edit-input" id="noteEditInput" rows="3">${oldText}</textarea>`;
+  const textarea = $('#noteEditInput');
+  textarea.focus();
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+  const actions = card.querySelector('.note-actions');
+  actions.innerHTML = `
+    <button class="note-action-btn note-action-save" data-save-edit="${id}">&#10003; сохранить</button>
+    <button class="note-action-btn note-action-cancel" data-cancel-edit="${id}">&#10005; отмена</button>
+  `;
+}
+
+function cancelEditNote(id) {
+  editingNoteId = null;
+  loadNotes();
+}
+
+async function saveEditNote(id) {
+  const textarea = $('#noteEditInput');
+  if (!textarea) return;
+  const newContent = textarea.value.trim();
+  if (!newContent) { toast('пустая заметка'); return; }
+  try {
+    await api('PUT', '/notes/' + id, { content: newContent });
+    toast('обновлено');
+    editingNoteId = null;
+    await loadNotes();
+  } catch (e) { toast('ошибка'); }
+}
+
+// ═══ Discuss with Curator ═══
+function discussWithCurator(text) {
+  const short = text.length > 200 ? text.slice(0, 200) + '...' : text;
+  $('#chatInput').value = 'Расскажи подробнее об этой мысли: "' + short + '"';
+  navigateTo('chat');
+  setTimeout(() => $('#chatInput').focus(), 100);
+}
+
+// ═══ Daily Summary (Итог дня) ═══
+async function dailySummary() {
+  const el = $('#dailySummary');
+  el.style.display = 'block';
+  el.innerHTML = '<div class="patterns-loading">думаю над итогами дня...</div>';
+
+  try {
+    const [notes, patterns] = await Promise.all([
+      api('GET', '/notes?date=' + selectedDate),
+      api('GET', '/insights/daily'),
+    ]);
+
+    let summaryHtml = '<div class="summary-content">';
+
+    if (notes.length > 0) {
+      summaryHtml += `<div class="summary-section">
+        <div class="summary-label">заметок за день</div>
+        <div class="summary-big">${notes.length}</div>
+      </div>`;
+
+      const categories = {};
+      for (const n of notes) {
+        const cat = n.ai_category || 'другое';
+        categories[cat] = (categories[cat] || 0) + 1;
+      }
+      const catHtml = Object.entries(categories)
+        .sort((a, b) => b[1] - a[1])
+        .map(([cat, cnt]) => `<span class="summary-tag">${esc(cat)} (${cnt})</span>`)
+        .join('');
+      if (catHtml) {
+        summaryHtml += `<div class="summary-section">
+          <div class="summary-label">темы дня</div>
+          <div class="summary-tags">${catHtml}</div>
+        </div>`;
+      }
+
+      const sentiments = notes.filter(n => n.ai_sentiment).map(n => n.ai_sentiment);
+      if (sentiments.length) {
+        const avg = sentiments.reduce((a, b) => a + b, 0) / sentiments.length;
+        const moodLabel = avg > 0.3 ? 'светлое' : avg > 0 ? 'спокойное' : avg > -0.3 ? 'нейтральное' : 'тревожное';
+        summaryHtml += `<div class="summary-section">
+          <div class="summary-label">настроение дня</div>
+          <div class="summary-big">${moodLabel}</div>
+        </div>`;
+      }
+    }
+
+    if (patterns.key_insight || patterns.emotional_arc) {
+      summaryHtml += `<div class="summary-section summary-insight">
+        <div class="summary-label">инсайт</div>
+        ${patterns.emotional_arc ? `<p>${esc(patterns.emotional_arc)}</p>` : ''}
+        ${patterns.key_insight ? `<p><strong>${esc(patterns.key_insight)}</strong></p>` : ''}
+        ${patterns.suggestion ? `<p class="summary-suggestion">${esc(patterns.suggestion)}</p>` : ''}
+      </div>`;
+    }
+
+    if (patterns.recurring_themes && patterns.recurring_themes.length) {
+      summaryHtml += `<div class="summary-section">
+        <div class="summary-label">повторяющиеся темы</div>
+        <div class="summary-tags">${patterns.recurring_themes.map(t => `<span class="summary-tag">${esc(t)}</span>`).join('')}</div>
+      </div>`;
+    }
+
+    summaryHtml += '</div>';
+    el.innerHTML = summaryHtml;
+
+  } catch (e) {
+    el.innerHTML = '<div class="patterns-loading">ошибка загрузки</div>';
+  }
+}
+
+// ═══ Tasks ═══
+async function loadTasks() {
+  hideAllSections(); $('#tasksSection').style.display = 'block';
+  try {
+    const tasks = await api('GET', '/tasks?date=' + selectedDate);
+    const upcoming = await api('GET', '/tasks/upcoming');
+    let html = '';
+    if (tasks.length) {
+      html += `<div class="note-group"><div class="group-header"><span class="group-label">на этот день</span><span class="group-count">${tasks.length}</span><div class="group-line"></div></div><div class="tasks-list">`;
+      for (const task of tasks) html += renderTask(task);
+      html += '</div></div>';
+    }
+    const otherTasks = upcoming.filter(t => t.due_date !== selectedDate);
+    if (otherTasks.length) {
+      html += `<div class="note-group"><div class="group-header"><span class="group-label">ближайшие</span><span class="group-count">${otherTasks.length}</span><div class="group-line"></div></div><div class="tasks-list">`;
+      for (const task of otherTasks) html += renderTask(task);
+      html += '</div></div>';
+    }
+    if (!tasks.length && !otherTasks.length) html = '<div class="empty-state"><div class="empty-icon">&#9744;</div><div class="empty-text">нет задач</div></div>';
+    $('#tasksList').innerHTML = html;
+  } catch (e) { $('#tasksList').innerHTML = '<div class="empty-state"><div class="empty-icon">&#9888;</div><div class="empty-text">ошибка загрузки</div></div>'; }
+}
+
+function renderTask(task) {
+  const isOverdue = task.due_date && task.due_date < todayStr() && !task.completed;
+  const dueStr = task.due_date ? formatDueDate(task.due_date, task.due_time) : '';
+  return `<div class="task-card ${task.completed ? 'completed' : ''} ${task.is_favorited ? 'favorited' : ''}">
+    <button class="task-fav" data-fav-task="${task.id}">${task.is_favorited ? '&#9733;' : '&#9734;'}</button>
+    <div class="task-priority p${task.priority}"></div>
+    <div class="task-check ${task.completed ? 'checked' : ''}" data-task-id="${task.id}"></div>
+    <div class="task-body"><div class="task-title">${esc(task.title)}</div>${dueStr ? `<div class="task-due ${isOverdue ? 'overdue' : ''}">${dueStr}</div>` : ''}</div>
+    <button class="task-delete" data-task-delete="${task.id}">&#10005;</button>
+  </div>`;
+}
+
+function formatDueDate(date, time) {
+  const d = new Date(date + 'T12:00:00');
+  const diff = Math.floor((d - new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())) / 86400000);
+  let dateStr = '';
+  if (diff === 0) dateStr = 'сегодня'; else if (diff === 1) dateStr = 'завтра'; else if (diff === -1) dateStr = 'вчера';
+  else dateStr = d.getDate() + ' ' + RU_MONTHS_GEN[d.getMonth()];
+  return time ? dateStr + ', ' + time : dateStr;
+}
+
+async function createTask() {
+  const title = $('#taskTitle').value.trim();
+  if (!title) return;
+  try {
+    await api('POST', '/tasks', { title, due_date: $('#taskDate').value || selectedDate, due_time: $('#taskTime').value, priority: parseInt($('#taskPriority').value) || 0 });
+    $('#taskTitle').value = ''; $('#taskTime').value = '';
+    toast('задача создана'); await loadTasks();
+  } catch (e) { toast('ошибка'); }
+}
+
+async function toggleTask(id) { try { const tasks = await api('GET', '/tasks?date=' + selectedDate); const task = tasks.find(t => t.id === id); if (task) { await api('PUT', '/tasks/' + id, { completed: task.completed ? 0 : 1 }); await loadTasks(); } } catch (e) {} }
+async function deleteTask(id) { try { await api('DELETE', '/tasks/' + id); toast('удалено'); await loadTasks(); } catch (e) {} }
+async function toggleTaskFavorite(id) { try { const r = await api('POST', '/tasks/' + id + '/favorite'); toast(r.is_favorited ? 'в избранном' : 'убрано'); await loadTasks(); } catch (e) { toast('ошибка'); } }
+
+// ═══ Dreams ═══
+async function loadDreams() {
+  hideAllSections(); $('#dreamsSection').style.display = 'block';
+  await loadDreamHistory();
+}
+
+async function loadDreamHistory() {
+  try {
+    const dreams = await api('GET', '/dreams?days=14');
+    const el = $('#dreamHistory');
+    if (!dreams.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#127769;</div><div class="empty-text">записи о снах появятся здесь</div></div>'; return; }
+    el.innerHTML = dreams.map(d => {
+      const typeLabel = d.dream_type === 'night' ? '&#127769; перед сном' : d.dream_type === 'morning' ? '&#9728; утро' : '&#128161; рефлексия';
+      const quality = d.sleep_quality ? '&#9733;'.repeat(d.sleep_quality) + '&#9734;'.repeat(5 - d.sleep_quality) : '';
+      const symbols = (d.ai_symbols || []).map(s => `<span class="dream-symbol">${esc(s)}</span>`).join('');
+      const time = d.created_at ? new Date(d.created_at).toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'}) : '';
+      return `<div class="dream-history-item">
+        <div class="dream-history-type">${typeLabel} · ${time}</div>
+        <div class="dream-history-content">${esc(d.content)}</div>
+        <div class="dream-history-meta">
+          ${quality ? `<span>${quality}</span>` : ''}
+          ${d.emotion_label ? `<span>${esc(d.emotion_label)}</span>` : ''}
+          ${d.ai_question ? `<span>вопрос: ${esc(d.ai_question)}</span>` : ''}
+        </div>
+        ${symbols ? `<div class="dream-history-symbols">${symbols}</div>` : ''}
+      </div>`;
+    }).join('');
+  } catch (e) { $('#dreamHistory').innerHTML = '<div class="empty-state"><div class="empty-text">ошибка загрузки</div></div>'; }
+}
+
+async function submitNightDream() {
+  const content = $('#dreamNightInput').value.trim();
+  if (!content) { toast('напиши что-нибудь'); return; }
+  const slider = $('#dreamEmotionSlider');
+  const val = parseInt(slider.value);
+  const emotionLabel = val > 30 ? 'спокойно' : val > 0 ? 'нейтрально' : val > -30 ? 'тревожно' : 'тёмно';
+  try {
+    await api('POST', '/dreams', {
+      content, dream_type: 'night', sleep_time: $('#dreamSleepTime').value,
+      emotion_label: emotionLabel,
+    });
+    $('#dreamNightInput').value = '';
+    toast('записано. доброй ночи.');
+    await loadDreamHistory();
+  } catch (e) { toast('ошибка'); }
+}
+
+async function submitMorningDream() {
+  const content = $('#dreamMorningInput').value.trim();
+  if (!content) { toast('вспомни хоть что-нибудь'); return; }
+  try {
+    await api('POST', '/dreams', {
+      content, dream_type: 'morning', wake_time: $('#dreamWakeTime').value,
+      sleep_quality: dreamQuality || null,
+    });
+    $('#dreamMorningInput').value = '';
+    toast('сохранено');
+    await loadDreamInsight();
+    await loadDreamHistory();
+  } catch (e) { toast('ошибка'); }
+}
+
+async function loadDreamInsight() {
+  const el = $('#dreamInsight');
+  el.style.display = 'block';
+  el.innerHTML = '<div class="patterns-loading">думаю...</div>';
+  try {
+    const data = await api('GET', '/dreams/insight');
+    el.innerHTML = `<div class="patterns-insight-content">${esc(data.insight).replace(/\n/g, '<br>')}</div>`;
+  } catch (e) { el.innerHTML = '<div class="patterns-loading">не удалось загрузить инсайт</div>'; }
+}
+
+// ═══ Chat ═══
+function showChat() {
+  hideAllSections();
+  $('#chatSection').classList.add('active');
+  if (isMobile()) {
+    $('#mobileHeader').style.display = 'none';
+    $('#mobileBottomBar').style.display = 'none';
+  }
+}
+
+function parseChatReply(text) {
+  const m = text.match(/\[AUTO_SAVE:(.+?)\]/s);
+  if (m) return { text: text.replace(/\[AUTO_SAVE:.+?\]/s, '').trim(), saveable: m[1].trim() };
+  return { text, saveable: null };
+}
+
+async function saveThought(text) {
+  try { await api('POST', '/ai/save-thought', { message: text }); toast('мысль сохранена'); } catch (e) { toast('ошибка'); }
+}
+
+async function sendChat() {
+  const input = $('#chatInput'); const msg = input.value.trim();
+  if (!msg) return;
+  const messagesEl = $('#chatMessages');
+  messagesEl.innerHTML += `<div class="chat-msg user">${esc(msg)}</div>`;
+  input.value = '';
+  messagesEl.innerHTML += `<div class="chat-msg ai" id="chatLoading"><div class="ai-dot"></div> думаю...</div>`;
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  try {
+    const result = await api('POST', '/ai/chat', { message: msg });
+    const loadingEl = $('#chatLoading'); if (loadingEl) loadingEl.remove();
+    const parsed = parseChatReply(result.reply);
+    let html = `<div class="chat-msg ai">${esc(parsed.text).replace(/\n/g, '<br>')}</div>`;
+    if (result.auto_saved && result.auto_saved.length) {
+      html += `<div class="chat-auto-saved">&#9829; мысль сохранена автоматически</div>`;
+    } else if (parsed.saveable) {
+      html += `<div class="chat-save-prompt"><span class="chat-save-text">сохранить как мысль?</span><button class="btn btn-small btn-save-thought" data-save="${esc(parsed.saveable)}">сохранить</button></div>`;
+    }
+    messagesEl.innerHTML += html;
+  } catch (e) {
+    const loadingEl = $('#chatLoading'); if (loadingEl) loadingEl.remove();
+    messagesEl.innerHTML += `<div class="chat-msg ai">ошибка соединения</div>`;
+  }
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+// ═══ Archive ═══
+function openArchive() { $('#chatSection').classList.remove('active'); $('#archivePanel').style.display = 'flex'; loadArchiveSessions(); }
+function closeArchive() { $('#archivePanel').style.display = 'none'; $('#chatSection').classList.add('active'); }
+
+async function loadArchiveSessions() {
+  const list = $('#archiveList'); list.innerHTML = '<div class="archive-empty">загрузка...</div>';
+  try {
+    const sessions = await api('GET', '/chat/sessions');
+    if (!sessions.length) { list.innerHTML = '<div class="archive-empty">нет диалогов</div>'; return; }
+    list.innerHTML = sessions.map(s => {
+      const date = s.started ? formatArchiveDate(s.started) : 'ранее';
+      return `<div class="archive-session" data-session-id="${s.session_id}">
+        <div class="archive-session-date">${date}</div>
+        <div class="archive-session-preview">${esc(s.preview)}</div>
+        <div class="archive-session-count">${s.msg_count} сообщений</div>
+      </div>`;
+    }).join('');
+  } catch (e) { list.innerHTML = '<div class="archive-empty">ошибка загрузки</div>'; }
+}
+
+function formatArchiveDate(iso) {
+  const d = new Date(iso);
+  const months = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+  return `${d.getDate()} ${months[d.getMonth()]}, ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+async function loadSession(sessionId) {
+  const view = $('#archiveView'); const list = $('#archiveList');
+  list.style.display = 'none'; view.style.display = 'flex';
+  view.innerHTML = `<div class="archive-back-row"><button class="btn btn-icon" onclick="closeArchiveView()">&#8592; все</button></div><div class="archive-empty">загрузка...</div>`;
+  try {
+    const messages = await api('GET', '/chat/sessions/' + sessionId);
+    let html = `<div class="archive-back-row"><button class="btn btn-icon" onclick="closeArchiveView()">&#8592; все</button></div>`;
+    html += messages.map(m => {
+      const time = m.time ? new Date(m.time).toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'}) : '';
+      return `<div class="archive-msg ${m.role}"><div>${esc(m.content).replace(/\n/g, '<br>')}</div><div class="archive-msg-time">${time}</div></div>`;
+    }).join('');
+    view.innerHTML = html; view.scrollTop = view.scrollHeight;
+  } catch (e) { view.innerHTML = `<div class="archive-back-row"><button class="btn btn-icon" onclick="closeArchiveView()">&#8592; все</button></div><div class="archive-empty">ошибка</div>`; }
+}
+
+function closeArchiveView() { $('#archiveView').style.display = 'none'; $('#archiveList').style.display = 'flex'; }
+
+async function searchArchive() {
+  const q = $('#archiveSearch').value.trim();
+  const list = $('#archiveList'); const results = $('#archiveResults'); const view = $('#archiveView');
+  if (!q) { results.style.display = 'none'; list.style.display = 'flex'; view.style.display = 'none'; return; }
+  list.style.display = 'none'; view.style.display = 'none'; results.style.display = 'flex';
+  results.innerHTML = '<div class="archive-empty">поиск...</div>';
+  try {
+    const data = await api('GET', '/chat/search?q=' + encodeURIComponent(q));
+    if (!data.length) { results.innerHTML = '<div class="archive-empty">ничего не найдено</div>'; return; }
+    results.innerHTML = data.map(r => {
+      const hl = r.snippet.replace(new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi'), '<mark>$1</mark>');
+      const roleLabel = r.role === 'user' ? 'ты' : 'куратор';
+      return `<div class="archive-result" data-result-session="${r.session_id || 0}"><div class="archive-result-snippet">${roleLabel}: ${hl}</div><div class="archive-result-meta">${r.time ? formatArchiveDate(r.time) : ''}</div></div>`;
+    }).join('');
+  } catch (e) { results.innerHTML = '<div class="archive-empty">ошибка поиска</div>'; }
+}
+
+// ═══ Patterns ═══
+async function loadPatterns() {
+  hideAllSections(); $('#patternsSection').style.display = 'block';
+  const days = parseInt($('#patternsPeriod').value) || 30;
+  const timeline = $('#patternsTimeline');
+  const stats = $('#patternsStats');
+  const insight = $('#patternsInsight');
+
+  timeline.innerHTML = '<div class="patterns-loading">загрузка...</div>';
+  stats.innerHTML = '';
+  insight.innerHTML = '';
+
+  try {
+    const [timelineData, patternsData] = await Promise.all([
+      api('GET', '/dreams/timeline?days=' + days),
+      api('GET', '/dreams/patterns?days=' + days),
+    ]);
+
+    if (timelineData.length) {
+      let dotsHtml = '<div class="patterns-timeline-inner">';
+      for (const d of timelineData) {
+        const size = Math.max(8, Math.min(32, 8 + d.count * 6));
+        const hue = Math.round(((d.avg_valence + 1) / 2) * 120);
+        const color = `hsl(${hue}, 50%, 50%)`;
+        const date = new Date(d.date + 'T12:00:00');
+        const label = date.getDate() + '.' + (date.getMonth()+1);
+        dotsHtml += `<div class="pattern-dot"><div class="pattern-dot-circle" style="width:${size}px;height:${size}px;background:${color}"></div><div class="pattern-dot-label">${label}</div></div>`;
+      }
+      dotsHtml += '</div>';
+      timeline.innerHTML = dotsHtml;
+    } else {
+      timeline.innerHTML = '<div class="patterns-loading">нет данных за этот период</div>';
+    }
+
+    const themes = (patternsData.recurring_themes || []).map(t => `<div class="pattern-stat"><div class="pattern-stat-label">тема</div><div class="pattern-stat-value">${esc(t)}</div></div>`).join('');
+    stats.innerHTML = themes;
+
+    if (patternsData.key_insight || patternsData.emotional_arc) {
+      insight.innerHTML = `<div class="patterns-insight"><div class="patterns-insight-title">инсайт недели</div><div class="patterns-insight-content">
+        ${patternsData.emotional_arc ? `<p>${esc(patternsData.emotional_arc)}</p>` : ''}
+        ${patternsData.key_insight ? `<p><strong>${esc(patternsData.key_insight)}</strong></p>` : ''}
+        ${patternsData.suggestion ? `<p style="color:var(--accent)">${esc(patternsData.suggestion)}</p>` : ''}
+      </div></div>`;
+    }
+  } catch (e) {
+    timeline.innerHTML = '<div class="patterns-loading">ошибка загрузки</div>';
+  }
+}
+
+// ═══ Voice ═══
+let recognition = null;
+function initVoice() {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) return;
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRecognition();
+  recognition.lang = 'ru-RU';
+  recognition.interimResults = false;
+  recognition.onresult = (e) => {
+    const text = e.results[0][0].transcript;
+    const input = $('#noteInput');
+    input.value = input.value ? input.value + ' ' + text : text;
+    autoResize(); updateCharCount();
+    $('#voiceBtn').classList.remove('recording');
+  };
+  recognition.onerror = () => { $('#voiceBtn').classList.remove('recording'); };
+  recognition.onend = () => { $('#voiceBtn').classList.remove('recording'); };
+}
+
+function toggleVoice() {
+  if (!recognition) { toast('голос не поддерживается'); return; }
+  if ($('#voiceBtn').classList.contains('recording')) { recognition.stop(); }
+  else { recognition.start(); $('#voiceBtn').classList.add('recording'); }
+}
+
+// ═══ Helpers ═══
+function hideAllSections() {
+  $('#notesSection').style.display = 'none';
+  $('#tasksSection').style.display = 'none';
+  $('#dreamsSection').style.display = 'none';
+  $('#chatSection').classList.remove('active');
+  $('#patternsSection').style.display = 'none';
+  $('#archivePanel').style.display = 'none';
+}
+
+function autoResize() { const i = $('#noteInput'); i.style.height = 'auto'; i.style.height = Math.min(i.scrollHeight, 200) + 'px'; }
+function updateCharCount() { $('#charCount').textContent = $('#noteInput').value.length; }
+
+async function downloadBackup() {
+  try {
+    const data = await api('GET', '/backup');
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    const d = new Date();
+    a.download = `curator-v3-${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
+    a.click(); URL.revokeObjectURL(url);
+    toast(`бекап: ${data.stats.notes} заметок, ${data.stats.tasks} задач, ${data.stats.dreams} записей о снах`);
+  } catch (e) { toast('ошибка бекапа'); }
+}
+
+// ═══ Mobile Drawer ═══
+function openDrawer() {
+  drawerOpen = true;
+  $('#drawerOverlay').classList.add('open');
+  $('#mobileDrawer').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDrawer() {
+  drawerOpen = false;
+  $('#drawerOverlay').classList.remove('open');
+  $('#mobileDrawer').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// ═══ Selection Toolbar ═══
+function initSelectionToolbar() {
+  const toolbar = $('#selectionToolbar');
+  let selectedText = '';
+  document.addEventListener('mouseup', (e) => {
+    if (toolbar.contains(e.target)) return;
+    setTimeout(() => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || !sel.toString().trim()) { toolbar.style.display = 'none'; return; }
+      const text = sel.toString().trim();
+      if (text.length < 3) { toolbar.style.display = 'none'; return; }
+      const range = sel.getRangeAt(0);
+      const chatEl = $('#chatMessages');
+      if (!chatEl || !chatEl.contains(range.commonAncestorContainer)) { toolbar.style.display = 'none'; return; }
+      selectedText = text;
+      const rect = range.getBoundingClientRect();
+      let top = rect.top - 48; if (top < 8) top = rect.bottom + 8;
+      let left = rect.left + rect.width / 2 - 110; left = Math.max(8, Math.min(left, window.innerWidth - 228));
+      toolbar.style.top = top + 'px'; toolbar.style.left = left + 'px'; toolbar.style.display = 'flex';
+    }, 10);
+  });
+  document.addEventListener('mousedown', (e) => { if (!toolbar.contains(e.target)) { toolbar.style.display = 'none'; selectedText = ''; } });
+  $('#selAsk').addEventListener('click', () => { if (!selectedText) return; $('#chatInput').value = 'расскажи подробнее: "' + selectedText + '"'; $('#chatInput').focus(); toolbar.style.display = 'none'; navigateTo('chat'); });
+  $('#selSave').addEventListener('click', async () => { if (!selectedText) return; await saveThought(selectedText); toolbar.style.display = 'none'; });
+}
+
+// ═══ Init ═══
+document.addEventListener('DOMContentLoaded', () => {
+  // Auth
+  $('#authLoginBtn').addEventListener('click', () => handleAuth('login'));
+  $('#authRegisterBtn').addEventListener('click', () => handleAuth('register'));
+  $$('.auth-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      $$('.auth-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const isLogin = tab.dataset.mode === 'login';
+      $('#authLoginBtn').style.display = isLogin ? 'block' : 'none';
+      $('#authRegisterBtn').style.display = isLogin ? 'none' : 'block';
+      $('#authError').textContent = '';
+    });
+  });
+
+  // Navigation (desktop)
+  $$('.nav-btn').forEach(btn => btn.addEventListener('click', () => navigateTo(btn.dataset.page)));
+
+  // Mobile navigation
+  $$('.mobile-tab').forEach(btn => btn.addEventListener('click', () => navigateTo(btn.dataset.page)));
+  $('#mobileHamburger').addEventListener('click', openDrawer);
+  $('#drawerOverlay').addEventListener('click', closeDrawer);
+
+  // Calendar
+  $('#btnToday').addEventListener('click', goToday);
+  const mobileTodayBtn = $('.btn-today-mobile');
+  if (mobileTodayBtn) mobileTodayBtn.addEventListener('click', goToday);
+  $('#calDays').addEventListener('click', e => { const day = e.target.closest('[data-date]'); if (day) selectDate(day.dataset.date); });
+  const calDaysMobile = $('#calDaysMobile');
+  if (calDaysMobile) calDaysMobile.addEventListener('click', e => { const day = e.target.closest('[data-date]'); if (day) selectDate(day.dataset.date); });
+  $$('.cal-nav').forEach(btn => btn.addEventListener('click', () => calNav(parseInt(btn.dataset.dir))));
+
+  // Note input
+  const noteInput = $('#noteInput');
+  noteInput.addEventListener('input', () => { autoResize(); updateCharCount(); });
+  noteInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveNote(); } });
+  $('#saveBtn').addEventListener('click', saveNote);
+
+  // Voice
+  initVoice();
+  $('#voiceBtn').addEventListener('click', toggleVoice);
+
+  // Notes
+  $('#notesSection').addEventListener('click', e => {
+    const fav = e.target.closest('[data-fav-note]');
+    if (fav) { toggleNoteFavorite(parseInt(fav.dataset.favNote)); return; }
+    const del = e.target.closest('[data-id]');
+    if (del) { deleteNote(parseInt(del.dataset.id)); return; }
+    const edit = e.target.closest('[data-edit-note]');
+    if (edit) { startEditNote(parseInt(edit.dataset.editNote)); return; }
+    const discuss = e.target.closest('[data-discuss-note]');
+    if (discuss) { discussWithCurator(discuss.dataset.discussText); return; }
+    const saveEdit = e.target.closest('[data-save-edit]');
+    if (saveEdit) { saveEditNote(parseInt(saveEdit.dataset.saveEdit)); return; }
+    const cancelEdit = e.target.closest('[data-cancel-edit]');
+    if (cancelEdit) { cancelEditNote(parseInt(cancelEdit.dataset.cancelEdit)); return; }
+  });
+  $('#notesSection').addEventListener('keydown', e => {
+    if (e.target.id === 'noteEditInput') {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveEditNote(editingNoteId); }
+      if (e.key === 'Escape') { cancelEditNote(editingNoteId); }
+    }
+  });
+
+  // Tasks
+  $('#addTaskBtn').addEventListener('click', () => $('#taskForm').classList.toggle('active'));
+  $('#taskFormSubmit').addEventListener('click', createTask);
+  $('#tasksSection').addEventListener('click', e => {
+    const fav = e.target.closest('[data-fav-task]');
+    if (fav) { toggleTaskFavorite(parseInt(fav.dataset.favTask)); return; }
+    const check = e.target.closest('[data-task-id]');
+    if (check) toggleTask(parseInt(check.dataset.taskId));
+    const del = e.target.closest('[data-task-delete]');
+    if (del) deleteTask(parseInt(del.dataset.taskDelete));
+  });
+
+  // Dreams
+  $$('.dream-mode').forEach(btn => {
+    btn.addEventListener('click', () => {
+      dreamMode = btn.dataset.mode;
+      $$('.dream-mode').forEach(b => b.classList.toggle('active', b.dataset.mode === dreamMode));
+      $('#dreamNightPanel').style.display = dreamMode === 'night' ? 'block' : 'none';
+      $('#dreamMorningPanel').style.display = dreamMode === 'morning' ? 'block' : 'none';
+    });
+  });
+  $('#dreamNightSubmit').addEventListener('click', submitNightDream);
+  $('#dreamMorningSubmit').addEventListener('click', submitMorningDream);
+  $$('.dream-star').forEach(star => {
+    star.addEventListener('click', () => {
+      dreamQuality = parseInt(star.dataset.q);
+      $$('.dream-star').forEach((s, i) => s.classList.toggle('active', i < dreamQuality));
+    });
+  });
+  $('#dreamEmotionSlider').addEventListener('input', (e) => {
+    const val = parseInt(e.target.value);
+    const label = val > 30 ? 'спокойно' : val > 0 ? 'нейтрально' : val > -30 ? 'тревожно' : 'тёмно';
+    $('#dreamEmotionValue').textContent = label;
+  });
+
+  // Chat
+  $('#chatSend').addEventListener('click', sendChat);
+  $('#chatInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } });
+  $('#chatMessages').addEventListener('click', e => { const btn = e.target.closest('.btn-save-thought'); if (btn) saveThought(btn.dataset.save); });
+  $('#archiveToggle').addEventListener('click', openArchive);
+  $('#archiveBack').addEventListener('click', closeArchive);
+  $('#archiveSearch').addEventListener('input', debounce(searchArchive, 300));
+  $('#archiveList').addEventListener('click', e => { const s = e.target.closest('[data-session-id]'); if (s) loadSession(parseInt(s.dataset.sessionId)); });
+  $('#archiveResults').addEventListener('click', e => { const r = e.target.closest('[data-result-session]'); if (r) loadSession(parseInt(r.dataset.resultSession)); });
+  const chatBackBtn = $('#chatBackBtn');
+  if (chatBackBtn) chatBackBtn.addEventListener('click', () => navigateTo('notes'));
+
+  // Patterns
+  $('#patternsPeriod').addEventListener('change', loadPatterns);
+
+  // User menu
+  $('#sidebarUser').addEventListener('click', logout);
+  $('#logoBtn').addEventListener('click', () => location.reload());
+  $('#btnBackup').addEventListener('click', downloadBackup);
+  $('#btnDailySummary').addEventListener('click', dailySummary);
+
+  // Mobile drawer buttons
+  const mobileBackupBtn = $('.btn-backup-mobile');
+  if (mobileBackupBtn) mobileBackupBtn.addEventListener('click', () => { closeDrawer(); downloadBackup(); });
+  const mobileSummaryBtn = $('.btn-daily-summary-mobile');
+  if (mobileSummaryBtn) mobileSummaryBtn.addEventListener('click', () => { closeDrawer(); dailySummary(); });
+
+  // Selection toolbar
+  initSelectionToolbar();
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey || e.metaKey) {
+      if (e.key === 'n') { e.preventDefault(); navigateTo('notes'); $('#noteInput').focus(); }
+      if (e.key === 'd') { e.preventDefault(); navigateTo('tasks'); }
+      if (e.key === 'k') { e.preventDefault(); navigateTo('chat'); $('#chatInput').focus(); }
+    }
+    if (e.key === 'Escape' && drawerOpen) closeDrawer();
+  });
+
+  // Resize handler
+  let resizeTimer;
+  let wasMobile = isMobile();
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      const nowMobile = isMobile();
+      if (wasMobile !== nowMobile) location.reload();
+      wasMobile = nowMobile;
+    }, 200);
+  });
+
+  // Swipe to close drawer
+  let touchStartX = 0;
+  $('#mobileDrawer').addEventListener('touchstart', e => {
+    touchStartX = e.touches[0].clientX;
+  }, { passive: true });
+  $('#mobileDrawer').addEventListener('touchend', e => {
+    const diff = e.changedTouches[0].clientX - touchStartX;
+    if (diff < -60) closeDrawer();
+  }, { passive: true });
+
+  // Init
+  initAuth();
+});
