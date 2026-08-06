@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
@@ -6,25 +6,25 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#06060f">
-  <title>РљРЈР РђРўРћР  v3</title>
-  <link rel="stylesheet" href="/css/base.css?v=5">
-  <link rel="stylesheet" href="/css/layout.css?v=5">
-  <link rel="stylesheet" href="/css/notes.css?v=5">
-  <link rel="stylesheet" href="/css/tasks.css?v=5">
-  <link rel="stylesheet" href="/css/dreams.css?v=5">
-  <link rel="stylesheet" href="/css/chat.css?v=5">
-  <link rel="stylesheet" href="/css/patterns.css?v=5">
-  <link rel="stylesheet" href="/css/animations.css?v=5">
-  <link rel="stylesheet" href="/css/mobile.css?v=5">
+  <title>КУРАТОР v3</title>
+  <link rel="stylesheet" href="/css/base.css?v=6">
+  <link rel="stylesheet" href="/css/layout.css?v=6">
+  <link rel="stylesheet" href="/css/notes.css?v=6">
+  <link rel="stylesheet" href="/css/tasks.css?v=6">
+  <link rel="stylesheet" href="/css/dreams.css?v=6">
+  <link rel="stylesheet" href="/css/chat.css?v=6">
+  <link rel="stylesheet" href="/css/patterns.css?v=6">
+  <link rel="stylesheet" href="/css/animations.css?v=6">
+  <link rel="stylesheet" href="/css/mobile.css?v=6">
 </head>
 <body>
 
   <!-- Mobile Header -->
   <header class="mobile-header" id="mobileHeader" style="display:none">
-    <button class="mobile-hamburger" id="mobileHamburger">в‰Ў</button>
+    <button class="mobile-hamburger" id="mobileHamburger">≡</button>
     <div style="text-align:center">
-      <div class="mobile-header-title" id="mobileHeaderTitle">Р—РђРњР•РўРљР</div>
-      <div class="mobile-header-date" id="mobileHeaderDate">РЎРµРіРѕРґРЅСЏ</div>
+      <div class="mobile-header-title" id="mobileHeaderTitle">ЗАМЕТКИ</div>
+      <div class="mobile-header-date" id="mobileHeaderDate">Сегодня</div>
     </div>
     <div class="mobile-header-right"></div>
   </header>
@@ -35,12 +35,12 @@
   <!-- Mobile Drawer -->
   <div class="mobile-drawer" id="mobileDrawer">
     <div class="drawer-header">
-      <span class="drawer-logo">РљРЈР РђРўРћР </span>
+      <span class="drawer-logo">КУРАТОР</span>
       <span class="drawer-version">v3</span>
     </div>
 
     <div class="drawer-section">
-      <div class="drawer-section-title">РєР°Р»РµРЅРґР°СЂСЊ</div>
+      <div class="drawer-section-title">календарь</div>
       <div class="mobile-calendar">
         <div class="calendar">
           <div class="cal-header">
@@ -49,23 +49,26 @@
             <button class="cal-nav" data-dir="1">&#8250;</button>
           </div>
           <div class="cal-weekdays">
-            <span>РџРЅ</span><span>Р’С‚</span><span>РЎСЂ</span><span>Р§С‚</span><span>РџС‚</span><span>РЎР±</span><span>Р’СЃ</span>
+            <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
           </div>
           <div class="cal-days" id="calDaysMobile"></div>
         </div>
       </div>
       <button class="drawer-btn btn-today-mobile" style="margin-top:8px">
-        <span class="drawer-btn-icon">вЂў</span> СЃРµРіРѕРґРЅСЏ
+        <span class="drawer-btn-icon">•</span> сегодня
       </button>
     </div>
 
     <div class="drawer-section">
-      <div class="drawer-section-title">РёРЅСЃС‚СЂСѓРјРµРЅС‚С‹</div>
+      <div class="drawer-section-title">инструменты</div>
       <button class="drawer-btn btn-daily-summary-mobile">
-        <span class="drawer-btn-icon">+</span> РёС‚РѕРі РґРЅСЏ
+        <span class="drawer-btn-icon">+</span> итог дня
       </button>
       <button class="drawer-btn btn-backup-mobile">
-        <span class="drawer-btn-icon">в†“</span> Р±РµРєР°Рї
+        <span class="drawer-btn-icon">↓</span> бекап
+      </button>
+      <button class="drawer-btn btn-reanalyze-mobile">
+        <span class="drawer-btn-icon">♻</span> переанализ заметок
       </button>
     </div>
 
@@ -75,45 +78,45 @@
   <!-- Mobile Bottom Bar -->
   <nav class="mobile-bottom-bar" id="mobileBottomBar" style="display:none">
     <button class="mobile-tab active" data-page="notes">
-      <span class="mobile-tab-icon">вњЋ</span>
-      <span>Р—Р°РјРµС‚РєРё</span>
+      <span class="mobile-tab-icon">✎</span>
+      <span>Заметки</span>
     </button>
     <button class="mobile-tab" data-page="tasks">
-      <span class="mobile-tab-icon">вђ</span>
-      <span>Р—Р°РґР°С‡Рё</span>
+      <span class="mobile-tab-icon">☐</span>
+      <span>Задачи</span>
     </button>
     <button class="mobile-tab" data-page="dreams">
-      <span class="mobile-tab-icon">вЅ</span>
-      <span>РЎРѕРЅ</span>
+      <span class="mobile-tab-icon">☽</span>
+      <span>Сон</span>
     </button>
     <button class="mobile-tab" data-page="chat">
-      <span class="mobile-tab-icon">в—‡</span>
-      <span>РљСѓСЂР°С‚РѕСЂ</span>
+      <span class="mobile-tab-icon">◇</span>
+      <span>Куратор</span>
     </button>
     <button class="mobile-tab" data-page="patterns">
-      <span class="mobile-tab-icon">вњ¦</span>
-      <span>РџР°С‚С‚РµСЂРЅС‹</span>
+      <span class="mobile-tab-icon">✦</span>
+      <span>Паттерны</span>
     </button>
   </nav>
 
   <!-- Auth -->
   <div class="auth-overlay" id="authOverlay" style="display:none">
     <div class="auth-box">
-      <h1 class="auth-logo">РљРЈР РђРўРћР </h1>
+      <h1 class="auth-logo">КУРАТОР</h1>
       <div class="auth-tabs">
-        <button class="auth-tab active" data-mode="login">Р’С…РѕРґ</button>
-        <button class="auth-tab" data-mode="register">Р РµРіРёСЃС‚СЂР°С†РёСЏ</button>
+        <button class="auth-tab active" data-mode="login">Вход</button>
+        <button class="auth-tab" data-mode="register">Регистрация</button>
       </div>
       <div class="auth-form">
         <div class="input-group">
-          <input type="text" id="authUsername" placeholder="РёРјСЏ" autocomplete="off">
+          <input type="text" id="authUsername" placeholder="имя" autocomplete="off">
         </div>
         <div class="input-group">
-          <input type="password" id="authPassword" placeholder="РїР°СЂРѕР»СЊ" autocomplete="off">
+          <input type="password" id="authPassword" placeholder="пароль" autocomplete="off">
         </div>
         <div class="auth-error" id="authError"></div>
-        <button class="btn" id="authLoginBtn">Р’РћР™РўР</button>
-        <button class="btn" id="authRegisterBtn" style="display:none">РЎРћР—Р”РђРўР¬</button>
+        <button class="btn" id="authLoginBtn">ВОЙТИ</button>
+        <button class="btn" id="authRegisterBtn" style="display:none">СОЗДАТЬ</button>
       </div>
     </div>
   </div>
@@ -122,29 +125,29 @@
   <div class="app-layout" id="appLayout" style="display:none">
     <aside class="sidebar">
       <div class="sidebar-header">
-        <span class="sidebar-title" id="logoBtn">РљРЈР РђРўРћР </span>
+        <span class="sidebar-title" id="logoBtn">КУРАТОР</span>
         <span class="sidebar-version">v3</span>
       </div>
 
       <nav class="nav-section">
         <button class="nav-btn active" data-page="notes">
-          <span class="nav-icon">&#9998;</span> Р—Р°РјРµС‚РєРё
+          <span class="nav-icon">&#9998;</span> Заметки
         </button>
         <button class="nav-btn" data-page="tasks">
-          <span class="nav-icon">&#9744;</span> Р—Р°РґР°С‡Рё
+          <span class="nav-icon">&#9744;</span> Задачи
         </button>
         <button class="nav-btn" data-page="dreams">
-          <span class="nav-icon">&#127769;</span> РЎРѕРЅ
+          <span class="nav-icon">&#127769;</span> Сон
         </button>
         <button class="nav-btn" data-page="chat">
-          <span class="nav-icon">&#9671;</span> РљСѓСЂР°С‚РѕСЂ
+          <span class="nav-icon">&#9671;</span> Куратор
         </button>
         <button class="nav-btn" data-page="patterns">
-          <span class="nav-icon">&#10022;</span> РџР°С‚С‚РµСЂРЅС‹
+          <span class="nav-icon">&#10022;</span> Паттерны
         </button>
       </nav>
 
-      <button class="btn btn-small" id="btnToday">РЎРµРіРѕРґРЅСЏ</button>
+      <button class="btn btn-small" id="btnToday">Сегодня</button>
 
       <div class="calendar">
         <div class="cal-header">
@@ -153,14 +156,15 @@
           <button class="cal-nav" data-dir="1">&#8250;</button>
         </div>
         <div class="cal-weekdays">
-          <span>РџРЅ</span><span>Р’С‚</span><span>РЎСЂ</span><span>Р§С‚</span><span>РџС‚</span><span>РЎР±</span><span>Р’СЃ</span>
+          <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
         </div>
         <div class="cal-days" id="calDays"></div>
       </div>
 
       <div class="sidebar-footer">
-        <button class="btn btn-small btn-ghost" id="btnDailySummary" title="РёС‚РѕРі РґРЅСЏ">&#10022; РёС‚РѕРі РґРЅСЏ</button>
-        <button class="btn btn-small btn-ghost" id="btnBackup">&#8681; Р±РµРєР°Рї</button>
+        <button class="btn btn-small btn-ghost" id="btnDailySummary" title="итог дня">&#10022; итог дня</button>
+        <button class="btn btn-small btn-ghost" id="btnBackup">&#8681; бекап</button>
+        <button class="btn btn-small btn-ghost" id="btnReanalyze">&#9835; переанализ</button>
         <span class="sidebar-user" id="sidebarUser"></span>
       </div>
     </aside>
@@ -174,44 +178,44 @@
       <!-- Notes -->
       <div id="notesSection">
         <div class="note-input-wrapper">
-          <textarea class="note-input" id="noteInput" placeholder="Р·Р°РїРёС€Рё РјС‹СЃР»СЊ..." rows="1"></textarea>
+          <textarea class="note-input" id="noteInput" placeholder="запиши мысль..." rows="1"></textarea>
           <div class="note-input-footer">
             <div class="note-input-left">
-              <button class="voice-btn" id="voiceBtn" title="РіРѕР»РѕСЃ">mic</button>
+              <button class="voice-btn" id="voiceBtn" title="голос">mic</button>
               <span class="char-count" id="charCount">0</span>
             </div>
-            <button class="btn btn-small" id="saveBtn">РЎРћРҐР РђРќРРўР¬</button>
+            <button class="btn btn-small" id="saveBtn">СОХРАНИТЬ</button>
           </div>
         </div>
-        <div class="input-hint">Enter вЂ” СЃРѕС…СЂР°РЅРёС‚СЊ В· Shift+Enter вЂ” РЅРѕРІР°СЏ СЃС‚СЂРѕРєР°</div>
+        <div class="input-hint">Enter — сохранить · Shift+Enter — новая строка</div>
         <div class="ai-status" id="aiStatus">
           <div class="ai-dot"></div>
-          Р°РЅР°Р»РёР·РёСЂСѓСЋ...
+          анализирую...
         </div>
         <div class="notes-section" id="notesList"></div>
         <div class="empty-state" id="emptyState">
           <div class="empty-icon">&#9671;</div>
-          <div class="empty-text">РЅР°РїРёС€Рё РїРµСЂРІСѓСЋ Р·Р°РјРµС‚РєСѓ</div>
+          <div class="empty-text">напиши первую заметку</div>
         </div>
         <div class="daily-summary" id="dailySummary" style="display:none"></div>
       </div>
 
       <!-- Tasks -->
       <div id="tasksSection" style="display:none">
-        <button class="btn btn-small" id="addTaskBtn" style="margin-bottom:16px">+ Р—Р°РґР°С‡Р°</button>
+        <button class="btn btn-small" id="addTaskBtn" style="margin-bottom:16px">+ Задача</button>
         <div class="task-form" id="taskForm">
           <div class="task-form-row">
-            <input type="text" id="taskTitle" placeholder="РЅР°Р·РІР°РЅРёРµ">
+            <input type="text" id="taskTitle" placeholder="название">
             <input type="date" id="taskDate">
             <input type="time" id="taskTime">
             <select id="taskPriority">
-              <option value="0">РѕР±С‹С‡РЅС‹Р№</option>
-              <option value="1">РІР°Р¶РЅС‹Р№</option>
-              <option value="2">СЃСЂРѕС‡РЅС‹Р№</option>
+              <option value="0">обычный</option>
+              <option value="1">важный</option>
+              <option value="2">срочный</option>
             </select>
           </div>
           <div class="task-form-row">
-            <button class="btn btn-small" id="taskFormSubmit">СЃРѕР·РґР°С‚СЊ</button>
+            <button class="btn btn-small" id="taskFormSubmit">создать</button>
           </div>
         </div>
         <div id="tasksList"></div>
@@ -220,30 +224,30 @@
       <!-- Dreams -->
       <div id="dreamsSection" style="display:none">
         <div class="dream-mode-toggle">
-          <button class="dream-mode active" data-mode="night">&#127769; РїРµСЂРµРґ СЃРЅРѕРј</button>
-          <button class="dream-mode" data-mode="morning">&#9728; СѓС‚СЂРѕ</button>
+          <button class="dream-mode active" data-mode="night">&#127769; перед сном</button>
+          <button class="dream-mode" data-mode="morning">&#9728; утро</button>
         </div>
 
         <div class="dream-panel" id="dreamNightPanel">
-          <div class="dream-prompt">С‡С‚Рѕ РѕСЃС‚Р°С‘С‚СЃСЏ СЃ С‚РѕР±РѕР№ СЃРµРіРѕРґРЅСЏ?</div>
-          <textarea class="dream-input" id="dreamNightInput" placeholder="РјС‹СЃР»Рё, РѕР±СЂР°Р·С‹, С‡СѓРІСЃС‚РІР°..." rows="4"></textarea>
+          <div class="dream-prompt">что остаётся с тобой сегодня?</div>
+          <textarea class="dream-input" id="dreamNightInput" placeholder="мысли, образы, чувства..." rows="4"></textarea>
           <div class="dream-emotion">
-            <span class="dream-emotion-label">СЌРјРѕС†РёСЏ:</span>
+            <span class="dream-emotion-label">эмоция:</span>
             <input type="range" class="dream-slider" id="dreamEmotionSlider" min="-100" max="100" value="0">
-            <span class="dream-emotion-value" id="dreamEmotionValue">РЅРµР№С‚СЂР°Р»СЊРЅРѕ</span>
+            <span class="dream-emotion-value" id="dreamEmotionValue">нейтрально</span>
           </div>
           <div class="dream-meta">
-            <label class="dream-meta-label">РІСЂРµРјСЏ Р·Р°СЃС‹РїР°РЅРёСЏ</label>
+            <label class="dream-meta-label">время засыпания</label>
             <input type="time" id="dreamSleepTime">
           </div>
-          <button class="btn dream-submit" id="dreamNightSubmit">РґРѕР±СЂРѕР№ РЅРѕС‡Рё</button>
+          <button class="btn dream-submit" id="dreamNightSubmit">доброй ночи</button>
         </div>
 
         <div class="dream-panel" id="dreamMorningPanel" style="display:none">
-          <div class="dream-prompt">С‡С‚Рѕ С‚С‹ РїРѕРјРЅРёС€СЊ?</div>
-          <textarea class="dream-input" id="dreamMorningInput" placeholder="С„СЂР°РіРјРµРЅС‚С‹, РѕР±СЂР°Р·С‹, С‡СѓРІСЃС‚РІР°..." rows="4"></textarea>
+          <div class="dream-prompt">что ты помнишь?</div>
+          <textarea class="dream-input" id="dreamMorningInput" placeholder="фрагменты, образы, чувства..." rows="4"></textarea>
           <div class="dream-quality">
-            <span class="dream-emotion-label">РєР°С‡РµСЃС‚РІРѕ СЃРЅР°:</span>
+            <span class="dream-emotion-label">качество сна:</span>
             <div class="dream-stars" id="dreamStars">
               <span class="dream-star" data-q="1">&#9734;</span>
               <span class="dream-star" data-q="2">&#9734;</span>
@@ -253,10 +257,10 @@
             </div>
           </div>
           <div class="dream-meta">
-            <label class="dream-meta-label">РїСЂРѕР±СѓР¶РґРµРЅРёРµ</label>
+            <label class="dream-meta-label">пробуждение</label>
             <input type="time" id="dreamWakeTime">
           </div>
-          <button class="btn dream-submit" id="dreamMorningSubmit">РЅР°С‡Р°С‚СЊ РґРµРЅСЊ</button>
+          <button class="btn dream-submit" id="dreamMorningSubmit">начать день</button>
         </div>
 
         <div class="dream-insight" id="dreamInsight" style="display:none"></div>
@@ -266,16 +270,16 @@
       <!-- Chat -->
       <div class="chat-section" id="chatSection">
         <div class="chat-topbar">
-          <span class="chat-title">РєСѓСЂР°С‚РѕСЂ</span>
-          <button class="btn btn-icon" id="chatNewBtn" title="РЅРѕРІС‹Р№ РґРёР°Р»РѕРі">&#10010;</button>
-          <button class="btn btn-icon" id="archiveToggle" title="РґРёР°Р»РѕРіРё">&#9776;</button>
+          <span class="chat-title">куратор</span>
+          <button class="btn btn-icon" id="chatNewBtn" title="новый диалог">&#10010;</button>
+          <button class="btn btn-icon" id="archiveToggle" title="диалоги">&#9776;</button>
         </div>
         <div class="chat-messages" id="chatMessages">
-          <div class="chat-msg ai">РїСЂРёРІРµС‚. СЏ РєСѓСЂР°С‚РѕСЂ вЂ” РїРѕРјРѕРіСѓ СЃС‚СЂСѓРєС‚СѓСЂРёСЂРѕРІР°С‚СЊ РјС‹СЃР»Рё, РЅР°Р№С‚Рё СЃРІСЏР·Рё, РїСЂРµРґР»РѕР¶РёС‚СЊ РёРЅСЃР°Р№С‚С‹. Рѕ С‡С‘Рј РґСѓРјР°РµС€СЊ?</div>
+          <div class="chat-msg ai">привет. я куратор — помогу структурировать мысли, найти связи, предложить инсайты. о чём думаешь?</div>
         </div>
         <div class="chat-input-row">
-          <button class="btn btn-icon chat-back-btn" id="chatBackBtn" title="РЅР°Р·Р°Рґ">&#8592;</button>
-          <input type="text" class="chat-input" id="chatInput" placeholder="РЅР°РїРёС€Рё СЃРѕРѕР±С‰РµРЅРёРµ...">
+          <button class="btn btn-icon chat-back-btn" id="chatBackBtn" title="назад">&#8592;</button>
+          <input type="text" class="chat-input" id="chatInput" placeholder="напиши сообщение...">
           <button class="btn" id="chatSend">&#10148;</button>
         </div>
       </div>
@@ -284,9 +288,9 @@
       <div class="archive-panel" id="archivePanel" style="display:none">
         <div class="archive-header">
           <button class="btn btn-icon" id="archiveBack">&#8592;</button>
-          <h3>РґРёР°Р»РѕРіРё</h3>
-          <input type="text" class="archive-search" id="archiveSearch" placeholder="РїРѕРёСЃРє...">
-          <button class="btn btn-small" id="archiveClearAll">РѕС‡РёСЃС‚РёС‚СЊ РІСЃС‘</button>
+          <h3>диалоги</h3>
+          <input type="text" class="archive-search" id="archiveSearch" placeholder="поиск...">
+          <button class="btn btn-small" id="archiveClearAll">очистить всё</button>
         </div>
         <div class="archive-content" id="archiveContent">
           <div class="archive-list" id="archiveList"></div>
@@ -297,11 +301,11 @@
       <!-- Patterns -->
       <div id="patternsSection" style="display:none">
         <div class="patterns-header">
-          <div class="patterns-title">РїР°С‚С‚РµСЂРЅС‹</div>
+          <div class="patterns-title">паттерны</div>
           <select class="patterns-period" id="patternsPeriod">
-            <option value="7">7 РґРЅРµР№</option>
-            <option value="14">14 РґРЅРµР№</option>
-            <option value="30" selected>30 РґРЅРµР№</option>
+            <option value="7">7 дней</option>
+            <option value="14">14 дней</option>
+            <option value="30" selected>30 дней</option>
           </select>
         </div>
         <div class="patterns-timeline" id="patternsTimeline"></div>
@@ -315,14 +319,14 @@
   <div class="toast" id="toast"></div>
 
   <div class="selection-toolbar" id="selectionToolbar" style="display:none">
-    <button class="sel-btn" id="selAsk" title="СѓС‚РѕС‡РЅРёС‚СЊ">
-      <span class="sel-icon">&#10024;</span> СѓС‚РѕС‡РЅРёС‚СЊ
+    <button class="sel-btn" id="selAsk" title="уточнить">
+      <span class="sel-icon">&#10024;</span> уточнить
     </button>
-    <button class="sel-btn sel-btn-accent" id="selSave" title="СЃРѕС…СЂР°РЅРёС‚СЊ">
-      <span class="sel-icon">&#9829;</span> СЃРѕС…СЂР°РЅРёС‚СЊ
+    <button class="sel-btn sel-btn-accent" id="selSave" title="сохранить">
+      <span class="sel-icon">&#9829;</span> сохранить
     </button>
   </div>
 
-  <script src="/js/app.js?v=5"></script>
+  <script src="/js/app.js?v=6"></script>
 </body>
 </html>

@@ -717,6 +717,17 @@ async function downloadBackup() {
   } catch (e) { toast('ошибка бекапа'); }
 }
 
+async function reanalyzeNotes() {
+  try {
+    const data = await api('POST', '/notes/reanalyze');
+    if (data.reanalyzed > 0) {
+      toast(`переанализ: ${data.reanalyzed} заметок в фоне`);
+    } else {
+      toast('все заметки уже проанализированы');
+    }
+  } catch (e) { toast('ошибка переанализа'); }
+}
+
 // ═══ Mobile Drawer ═══
 function openDrawer() {
   drawerOpen = true;
@@ -885,12 +896,15 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#logoBtn').addEventListener('click', () => location.reload());
   $('#btnBackup').addEventListener('click', downloadBackup);
   $('#btnDailySummary').addEventListener('click', dailySummary);
+  $('#btnReanalyze').addEventListener('click', reanalyzeNotes);
 
   // Mobile drawer buttons
   const mobileBackupBtn = $('.btn-backup-mobile');
   if (mobileBackupBtn) mobileBackupBtn.addEventListener('click', () => { closeDrawer(); downloadBackup(); });
   const mobileSummaryBtn = $('.btn-daily-summary-mobile');
   if (mobileSummaryBtn) mobileSummaryBtn.addEventListener('click', () => { closeDrawer(); dailySummary(); });
+  const mobileReanalyzeBtn = $('.btn-reanalyze-mobile');
+  if (mobileReanalyzeBtn) mobileReanalyzeBtn.addEventListener('click', () => { closeDrawer(); reanalyzeNotes(); });
 
   // Selection toolbar
   initSelectionToolbar();

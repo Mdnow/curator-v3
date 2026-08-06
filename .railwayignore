@@ -1,6 +1,6 @@
 .env
 .git
-screen*.png
+*.png
 test_all.py
 test_feat.py
 __pycache__

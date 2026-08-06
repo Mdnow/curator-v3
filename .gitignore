@@ -2,5 +2,5 @@ __pycache__/
 *.pyc
 .env
 .ruff_cache/
-screen*.png
+*.png
 .playwright-mcp/

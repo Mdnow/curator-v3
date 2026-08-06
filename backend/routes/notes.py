@@ -147,6 +147,56 @@ async def create_note(
     return {"id": note_id}
 
 
+async def _reanalyze_in_background(note_ids: list[int], user_id: int):
+    from backend.db import get_pool
+
+    pool = await get_pool()
+    async with pool.acquire() as db:
+        for note_id in note_ids:
+            row = await db.fetchrow(
+                "SELECT content_encrypted FROM notes WHERE id=$1 AND user_id=$2",
+                note_id,
+                user_id,
+            )
+            if not row:
+                continue
+            try:
+                content = decrypt(row["content_encrypted"])
+            except Exception:
+                continue
+            if not content or not content.strip():
+                continue
+            ai = await analyze_note(content)
+            if ai.get("summary") or ai.get("category"):
+                await db.execute(
+                    "UPDATE notes SET ai_summary=$1, ai_category=$2, ai_sentiment=$3, ai_keyphrases=$4 WHERE id=$5",
+                    ai.get("summary", ""),
+                    ai.get("category", ""),
+                    ai.get("sentiment", 0.0),
+                    json.dumps(ai.get("keyphrases", [])),
+                    note_id,
+                )
+
+
+@router.post("/reanalyze")
+async def reanalyze_notes(
+    bg: BackgroundTasks, user_id: int = Depends(get_current_user)
+):
+    async with get_db() as db:
+        rows = await db.fetch(
+            """SELECT id FROM notes
+               WHERE user_id=$1 AND (ai_category IS NULL OR ai_category='' OR ai_category='без категории')
+               ORDER BY created_at DESC LIMIT 200""",
+            user_id,
+        )
+        ids = [r["id"] for r in rows]
+
+    if not ids:
+        return {"reanalyzed": 0}
+    bg.add_task(_reanalyze_in_background, ids, user_id)
+    return {"reanalyzed": len(ids)}
+
+
 @router.put("/{note_id}")
 async def update_note(
     note_id: int, req: NoteUpdateReq, user_id: int = Depends(get_current_user)
