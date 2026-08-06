@@ -3,9 +3,12 @@ import json
 from backend.config import OPENROUTER_API_KEY, OPENROUTER_URL
 
 FREE_MODELS = [
-    "google/gemma-4-31b-it:free",
     "nvidia/nemotron-3-super-120b-a12b:free",
-    "openrouter/free",
+    "google/gemma-4-26b-a4b-it:free",
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "nvidia/nemotron-3-nano-30b-a3b:free",
+    "google/gemma-4-31b-it:free",
+    "openai/gpt-oss-20b:free",
 ]
 
 ANALYZE_NOTE_PROMPT = """Ты — интуитивный куратор мыслей. Проанализируй текст и верни JSON:
@@ -99,6 +102,50 @@ THREAD_SUGGEST_PROMPT = """Ты — система навигации мысле
 Только JSON, без markdown."""
 
 
+def _parse_json_content(content: str) -> dict | None:
+    if not content:
+        return None
+    try:
+        text = content.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        data = json.loads(text)
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
+
+
+async def _request_model(
+    client: httpx.AsyncClient,
+    model: str,
+    msgs: list[dict],
+    temperature: float,
+    max_tokens: int,
+) -> str | None:
+    try:
+        r = await client.post(
+            OPENROUTER_URL,
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model,
+                "messages": msgs,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "reasoning": {"exclude": True},
+            },
+        )
+        if r.status_code == 429:
+            return None
+        r.raise_for_status()
+        content = r.json()["choices"][0]["message"]["content"]
+        return content or None
+    except Exception:
+        return None
+
+
 async def call_ai(
     user_content: str,
     system: str | None = None,
@@ -114,30 +161,35 @@ async def call_ai(
     msgs.append({"role": "user", "content": user_content})
 
     async with httpx.AsyncClient(timeout=15) as client:
-        for model in FREE_MODELS:
-            try:
-                r = await client.post(
-                    OPENROUTER_URL,
-                    headers={
-                        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": model,
-                        "messages": msgs,
-                        "temperature": temperature,
-                        "max_tokens": max_tokens,
-                        "reasoning": {"exclude": True},
-                    },
+        for _ in range(2):
+            for model in FREE_MODELS:
+                content = await _request_model(
+                    client, model, msgs, temperature, max_tokens
                 )
-                if r.status_code == 429:
-                    continue
-                r.raise_for_status()
-                return r.json()["choices"][0]["message"]["content"]
-            except httpx.HTTPStatusError:
-                continue
-            except Exception:
-                continue
+                if content:
+                    return content
+    return None
+
+
+async def call_ai_json(
+    user_content: str,
+    temperature: float = 0.3,
+    max_tokens: int = 500,
+) -> dict | None:
+    if not OPENROUTER_API_KEY:
+        return None
+
+    msgs = [{"role": "user", "content": user_content}]
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        for _ in range(2):
+            for model in FREE_MODELS:
+                content = await _request_model(
+                    client, model, msgs, temperature, max_tokens
+                )
+                data = _parse_json_content(content)
+                if data is not None:
+                    return data
     return None
 
 
@@ -151,8 +203,10 @@ async def analyze_note(text: str) -> dict:
             "thread_hint": None,
         }
 
-    result = await call_ai(ANALYZE_NOTE_PROMPT + text, temperature=0.3, max_tokens=500)
-    if result is None:
+    data = await call_ai_json(
+        ANALYZE_NOTE_PROMPT + text, temperature=0.3, max_tokens=500
+    )
+    if data is None:
         return {
             "summary": "",
             "category": "без категории",
@@ -162,19 +216,13 @@ async def analyze_note(text: str) -> dict:
             "error": "AI недоступен",
         }
 
-    try:
-        content = result.strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        return json.loads(content)
-    except Exception:
-        return {
-            "summary": "",
-            "category": "без категории",
-            "sentiment": 0.0,
-            "keyphrases": [],
-            "thread_hint": None,
-        }
+    return {
+        "summary": data.get("summary", ""),
+        "category": data.get("category", "без категории"),
+        "sentiment": float(data.get("sentiment", 0.0) or 0.0),
+        "keyphrases": data.get("keyphrases", []),
+        "thread_hint": data.get("thread_hint"),
+    }
 
 
 async def analyze_dream(text: str) -> dict:
@@ -187,8 +235,10 @@ async def analyze_dream(text: str) -> dict:
             "question": "",
         }
 
-    result = await call_ai(ANALYZE_DREAM_PROMPT + text, temperature=0.5, max_tokens=500)
-    if result is None:
+    data = await call_ai_json(
+        ANALYZE_DREAM_PROMPT + text, temperature=0.5, max_tokens=500
+    )
+    if data is None:
         return {
             "symbols": [],
             "themes": [],
@@ -198,19 +248,13 @@ async def analyze_dream(text: str) -> dict:
             "error": "AI недоступен",
         }
 
-    try:
-        content = result.strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        return json.loads(content)
-    except Exception:
-        return {
-            "symbols": [],
-            "themes": [],
-            "summary": "",
-            "valence": 0.0,
-            "question": "",
-        }
+    return {
+        "symbols": data.get("symbols", []),
+        "themes": data.get("themes", []),
+        "summary": data.get("summary", ""),
+        "valence": float(data.get("valence", 0.0) or 0.0),
+        "question": data.get("question", ""),
+    }
 
 
 async def dream_insight(
@@ -239,8 +283,8 @@ async def daily_patterns(notes_text: str, dreams_text: str) -> dict:
         }
 
     prompt = DAILY_PATTERNS_PROMPT.format(notes=notes_text, dreams=dreams_text)
-    result = await call_ai(prompt, temperature=0.4, max_tokens=500)
-    if result is None:
+    data = await call_ai_json(prompt, temperature=0.4, max_tokens=500)
+    if data is None:
         return {
             "recurring_themes": [],
             "emotional_arc": "",
@@ -248,18 +292,12 @@ async def daily_patterns(notes_text: str, dreams_text: str) -> dict:
             "suggestion": "",
         }
 
-    try:
-        content = result.strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-        return json.loads(content)
-    except Exception:
-        return {
-            "recurring_themes": [],
-            "emotional_arc": "",
-            "key_insight": "",
-            "suggestion": "",
-        }
+    return {
+        "recurring_themes": data.get("recurring_themes", []),
+        "emotional_arc": data.get("emotional_arc", ""),
+        "key_insight": data.get("key_insight", ""),
+        "suggestion": data.get("suggestion", ""),
+    }
 
 
 async def thread_suggest(content: str, threads: str) -> dict:
@@ -267,19 +305,15 @@ async def thread_suggest(content: str, threads: str) -> dict:
         return {"thread_id": None, "thread_name": "", "confidence": 0.0}
 
     prompt = THREAD_SUGGEST_PROMPT.format(content=content, threads=threads)
-    result = await call_ai(prompt, temperature=0.2, max_tokens=200)
-    if result is None:
+    data = await call_ai_json(prompt, temperature=0.2, max_tokens=200)
+    if data is None:
         return {"thread_id": None, "thread_name": "", "confidence": 0.0}
 
-    try:
-        content_stripped = result.strip()
-        if content_stripped.startswith("```"):
-            content_stripped = (
-                content_stripped.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-            )
-        return json.loads(content_stripped)
-    except Exception:
-        return {"thread_id": None, "thread_name": "", "confidence": 0.0}
+    return {
+        "thread_id": data.get("thread_id"),
+        "thread_name": data.get("thread_name", ""),
+        "confidence": float(data.get("confidence", 0.0) or 0.0),
+    }
 
 
 CHAT_SYSTEM = """Ты — Куратор, AI-ассистент внутри приложения для заметок.
@@ -312,29 +346,12 @@ async def chat_with_context(messages: list[dict], system: str = "") -> str:
     msgs.extend(messages)
 
     async with httpx.AsyncClient(timeout=60) as client:
-        for model in FREE_MODELS:
-            try:
-                r = await client.post(
-                    OPENROUTER_URL,
-                    headers={
-                        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": model,
-                        "messages": msgs,
-                        "temperature": 0.7,
-                        "max_tokens": 2000,
-                        "reasoning": {"exclude": True},
-                    },
+        for _ in range(2):
+            for model in FREE_MODELS:
+                content = await _request_model(
+                    client, model, msgs, temperature=0.7, max_tokens=2000
                 )
-                if r.status_code == 429:
-                    continue
-                r.raise_for_status()
-                return r.json()["choices"][0]["message"]["content"]
-            except httpx.HTTPStatusError:
-                continue
-            except Exception:
-                continue
+                if content:
+                    return content
 
     return "AI временно недоступен. Попробуй через минуту."
