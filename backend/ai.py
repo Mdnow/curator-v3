@@ -102,7 +102,7 @@ THREAD_SUGGEST_PROMPT = """Ты — система навигации мысле
 Только JSON, без markdown."""
 
 
-def _parse_json_content(content: str) -> dict | None:
+def _parse_json_content(content: str | None) -> dict | None:
     if not content:
         return None
     try:
@@ -138,11 +138,21 @@ async def _request_model(
             },
         )
         if r.status_code == 429:
+            print(f"[ai] {model} -> 429", flush=True)
+            return None
+        if r.status_code >= 400:
+            err = ""
+            try:
+                err = r.json().get("error", {}).get("message", "")[:200]
+            except Exception:
+                err = r.text[:200]
+            print(f"[ai] {model} -> {r.status_code}: {err}", flush=True)
             return None
         r.raise_for_status()
         content = r.json()["choices"][0]["message"]["content"]
         return content or None
-    except Exception:
+    except Exception as e:
+        print(f"[ai] {model} -> EXC {type(e).__name__}: {str(e)[:150]}", flush=True)
         return None
 
 

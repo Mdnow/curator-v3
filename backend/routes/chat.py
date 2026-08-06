@@ -16,23 +16,33 @@ router = APIRouter(prefix="/api", tags=["chat"])
 @router.post("/ai/chat")
 async def ai_chat(req: ChatReq, user_id: int = Depends(get_current_user)):
     async with get_db() as db:
-        last_row = await db.fetchrow(
-            """SELECT session_id, created_at FROM chat_history
-               WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1""",
-            user_id,
-        )
-        session_id = 1
-        if last_row:
-            try:
-                last_time = last_row["created_at"]
-                if isinstance(last_time, str):
-                    last_time = datetime.fromisoformat(last_time)
-                if (datetime.now() - last_time) > timedelta(hours=2):
+        if req.session_id is not None:
+            owner = await db.fetchrow(
+                "SELECT id FROM chat_history WHERE user_id=$1 AND session_id=$2 LIMIT 1",
+                user_id,
+                req.session_id,
+            )
+            if not owner:
+                raise HTTPException(404, "диалог не найден")
+            session_id = req.session_id
+        else:
+            last_row = await db.fetchrow(
+                """SELECT session_id, created_at FROM chat_history
+                   WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1""",
+                user_id,
+            )
+            session_id = 1
+            if last_row:
+                try:
+                    last_time = last_row["created_at"]
+                    if isinstance(last_time, str):
+                        last_time = datetime.fromisoformat(last_time)
+                    if (datetime.now() - last_time) > timedelta(hours=2):
+                        session_id = (last_row["session_id"] or 0) + 1
+                    else:
+                        session_id = last_row["session_id"] or 1
+                except Exception:
                     session_id = (last_row["session_id"] or 0) + 1
-                else:
-                    session_id = last_row["session_id"] or 1
-            except Exception:
-                session_id = (last_row["session_id"] or 0) + 1
 
         await db.execute(
             """INSERT INTO chat_history (user_id, role, content, session_id)
@@ -45,29 +55,59 @@ async def ai_chat(req: ChatReq, user_id: int = Depends(get_current_user)):
 
         all_rows = await db.fetch(
             """SELECT role, content FROM chat_history
-               WHERE user_id=$1 ORDER BY created_at DESC LIMIT 40""",
+               WHERE user_id=$1 AND session_id=$2
+               ORDER BY created_at DESC LIMIT 40""",
             user_id,
+            session_id,
         )
         history = []
         for r in reversed(all_rows):
             history.append({"role": r["role"], "content": r["content"]})
 
         note_rows = await db.fetch(
-            """SELECT content_encrypted, note_date, is_favorited
+            """SELECT content_encrypted, note_date, is_favorited, ai_summary,
+                      ai_category
                FROM notes WHERE user_id=$1
                ORDER BY created_at DESC LIMIT 30""",
             user_id,
         )
         notes = []
         fav_notes = []
+        cat_counts = {}
         for r in note_rows:
             try:
                 text = decrypt(r["content_encrypted"])
                 notes.append(f"[{r['note_date']}] {text}")
                 if r["is_favorited"]:
                     fav_notes.append(text)
+                cat = (r["ai_category"] or "").strip()
+                if cat and cat != "без категории":
+                    cat_counts[cat] = cat_counts.get(cat, 0) + 1
             except Exception:
                 pass
+
+        dream_rows = await db.fetch(
+            """SELECT content_encrypted, created_at FROM dreams
+               WHERE user_id=$1 ORDER BY created_at DESC LIMIT 5""",
+            user_id,
+        )
+        dreams = []
+        for r in dream_rows:
+            try:
+                dreams.append(decrypt(r["content_encrypted"]))
+            except Exception:
+                pass
+
+        pattern_block = ""
+        if cat_counts:
+            top = sorted(cat_counts.items(), key=lambda x: -x[1])[:4]
+            pattern_block += "\n\nСВОДКА ТЕМ ЗА ПОСЛЕДНИЕ ЗАМЕТКИ:\n" + "\n".join(
+                f"- {k}: {v}" for k, v in top
+            )
+        if dreams:
+            pattern_block += "\n\nПОСЛЕДНИЕ ЗАПИСИ О СНАХ:\n" + "\n".join(
+                f"- {d[:140]}" for d in dreams
+            )
 
         fav_context = ""
         if fav_notes:
@@ -78,6 +118,7 @@ async def ai_chat(req: ChatReq, user_id: int = Depends(get_current_user)):
         system = (
             CHAT_SYSTEM
             + ("\n".join(notes) if notes else "Заметок пока нет.")
+            + pattern_block
             + fav_context
         )
 
@@ -164,6 +205,23 @@ async def chat_history(
 async def clear_chat(user_id: int = Depends(get_current_user)):
     async with get_db() as db:
         await db.execute("DELETE FROM chat_history WHERE user_id=$1", user_id)
+        return {"ok": True}
+
+
+@router.delete("/chat/sessions/{session_id}")
+async def delete_session(session_id: int, user_id: int = Depends(get_current_user)):
+    async with get_db() as db:
+        if session_id == 0:
+            await db.execute(
+                "DELETE FROM chat_history WHERE user_id=$1 AND session_id IS NULL",
+                user_id,
+            )
+        else:
+            await db.execute(
+                "DELETE FROM chat_history WHERE user_id=$1 AND session_id=$2",
+                user_id,
+                session_id,
+            )
         return {"ok": True}
 
 

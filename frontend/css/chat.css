@@ -28,6 +28,15 @@
 .chat-save-text { font-size: var(--font-xs); color: var(--text-3); }
 
 .chat-back-btn { display: none; }
+.chat-topbar {
+  display: flex; align-items: center; gap: var(--space-sm);
+  padding: var(--space-sm) 0; border-bottom: 1px solid var(--border);
+  margin-bottom: var(--space-sm);
+}
+.chat-title {
+  flex: 1; font-size: var(--font-xs); color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
 .chat-input-row {
   display: flex; gap: var(--space-sm); align-items: center;
   padding: var(--space-md) 0; border-top: 1px solid var(--border);
@@ -65,6 +74,8 @@
 .archive-session-date { font-size: var(--font-xs); color: var(--text-3); min-width: 80px; }
 .archive-session-preview { flex: 1; font-size: var(--font-sm); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .archive-session-count { font-size: var(--font-xs); color: var(--text-3); }
+.archive-session-delete { flex-shrink: 0; opacity: 0.5; color: var(--text-3); }
+.archive-session-delete:hover { opacity: 1; color: var(--danger); background: var(--danger-bg); }
 .archive-empty { text-align: center; padding: var(--space-xl); color: var(--text-3); font-size: var(--font-sm); }
 .archive-view { display: flex; flex-direction: column; gap: var(--space-sm); }
 .archive-msg {

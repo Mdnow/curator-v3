@@ -491,6 +491,8 @@ async function loadDreamInsight() {
 }
 
 // ═══ Chat ═══
+let currentSessionId = null;
+
 function showChat() {
   hideAllSections();
   $('#chatSection').classList.add('active');
@@ -498,6 +500,14 @@ function showChat() {
     $('#mobileHeader').style.display = 'none';
     $('#mobileBottomBar').style.display = 'none';
   }
+}
+
+function newChat() {
+  currentSessionId = null;
+  $('#chatMessages').innerHTML = '<div class="chat-msg ai">привет. я куратор — помогу структурировать мысли, найти связи, предложить инсайты. о чём думаешь?</div>';
+  $('#archivePanel').style.display = 'none';
+  $('#chatSection').classList.add('active');
+  setTimeout(() => $('#chatInput').focus(), 100);
 }
 
 function parseChatReply(text) {
@@ -519,12 +529,13 @@ async function sendChat() {
   messagesEl.innerHTML += `<div class="chat-msg ai" id="chatLoading"><div class="ai-dot"></div> думаю...</div>`;
   messagesEl.scrollTop = messagesEl.scrollHeight;
   try {
-    const result = await api('POST', '/ai/chat', { message: msg });
+    const result = await api('POST', '/ai/chat', { message: msg, session_id: currentSessionId });
     const loadingEl = $('#chatLoading'); if (loadingEl) loadingEl.remove();
+    if (result.session_id) currentSessionId = result.session_id;
     const parsed = parseChatReply(result.reply);
     let html = `<div class="chat-msg ai">${esc(parsed.text).replace(/\n/g, '<br>')}</div>`;
     if (result.auto_saved && result.auto_saved.length) {
-      html += `<div class="chat-auto-saved">&#9829; мысль сохранена автоматически</div>`;
+      html += `<div class="chat-auto-saved">мысль сохранена автоматически</div>`;
     } else if (parsed.saveable) {
       html += `<div class="chat-save-prompt"><span class="chat-save-text">сохранить как мысль?</span><button class="btn btn-small btn-save-thought" data-save="${esc(parsed.saveable)}">сохранить</button></div>`;
     }
@@ -536,7 +547,7 @@ async function sendChat() {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
-// ═══ Archive ═══
+// ═══ Dialogs (archive) ═══
 function openArchive() { $('#chatSection').classList.remove('active'); $('#archivePanel').style.display = 'flex'; loadArchiveSessions(); }
 function closeArchive() { $('#archivePanel').style.display = 'none'; $('#chatSection').classList.add('active'); }
 
@@ -551,6 +562,7 @@ async function loadArchiveSessions() {
         <div class="archive-session-date">${date}</div>
         <div class="archive-session-preview">${esc(s.preview)}</div>
         <div class="archive-session-count">${s.msg_count} сообщений</div>
+        <button class="btn btn-icon archive-session-delete" data-del-session="${s.session_id}" title="удалить">&#10005;</button>
       </div>`;
     }).join('');
   } catch (e) { list.innerHTML = '<div class="archive-empty">ошибка загрузки</div>'; }
@@ -562,28 +574,37 @@ function formatArchiveDate(iso) {
   return `${d.getDate()} ${months[d.getMonth()]}, ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
 
-async function loadSession(sessionId) {
-  const view = $('#archiveView'); const list = $('#archiveList');
-  list.style.display = 'none'; view.style.display = 'flex';
-  view.innerHTML = `<div class="archive-back-row"><button class="btn btn-icon" onclick="closeArchiveView()">&#8592; все</button></div><div class="archive-empty">загрузка...</div>`;
+async function openSessionInChat(sessionId) {
+  closeArchive();
+  const messagesEl = $('#chatMessages');
+  messagesEl.innerHTML = '<div class="chat-msg ai">загрузка...</div>';
   try {
     const messages = await api('GET', '/chat/sessions/' + sessionId);
-    let html = `<div class="archive-back-row"><button class="btn btn-icon" onclick="closeArchiveView()">&#8592; все</button></div>`;
-    html += messages.map(m => {
-      const time = m.time ? new Date(m.time).toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'}) : '';
-      return `<div class="archive-msg ${m.role}"><div>${esc(m.content).replace(/\n/g, '<br>')}</div><div class="archive-msg-time">${time}</div></div>`;
+    if (!messages.length) { messagesEl.innerHTML = '<div class="chat-msg ai">диалог пуст</div>'; return; }
+    messagesEl.innerHTML = messages.map(m => {
+      const role = m.role === 'assistant' ? 'ai' : 'user';
+      return `<div class="chat-msg ${role}">${esc(m.content).replace(/\n/g, '<br>')}</div>`;
     }).join('');
-    view.innerHTML = html; view.scrollTop = view.scrollHeight;
-  } catch (e) { view.innerHTML = `<div class="archive-back-row"><button class="btn btn-icon" onclick="closeArchiveView()">&#8592; все</button></div><div class="archive-empty">ошибка</div>`; }
+    currentSessionId = sessionId;
+  } catch (e) {
+    messagesEl.innerHTML = '<div class="chat-msg ai">ошибка загрузки диалога</div>';
+  }
+  messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
-function closeArchiveView() { $('#archiveView').style.display = 'none'; $('#archiveList').style.display = 'flex'; }
+async function deleteSession(sessionId) {
+  try { await api('DELETE', '/chat/sessions/' + sessionId); loadArchiveSessions(); } catch (e) { toast('ошибка'); }
+}
+
+async function clearAllChat() {
+  try { await api('DELETE', '/chat/history'); loadArchiveSessions(); } catch (e) { toast('ошибка'); }
+}
 
 async function searchArchive() {
   const q = $('#archiveSearch').value.trim();
-  const list = $('#archiveList'); const results = $('#archiveResults'); const view = $('#archiveView');
-  if (!q) { results.style.display = 'none'; list.style.display = 'flex'; view.style.display = 'none'; return; }
-  list.style.display = 'none'; view.style.display = 'none'; results.style.display = 'flex';
+  const list = $('#archiveList'); const results = $('#archiveResults');
+  if (!q) { results.style.display = 'none'; list.style.display = 'flex'; return; }
+  list.style.display = 'none'; results.style.display = 'flex';
   results.innerHTML = '<div class="archive-empty">поиск...</div>';
   try {
     const data = await api('GET', '/chat/search?q=' + encodeURIComponent(q));
@@ -841,11 +862,18 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#chatSend').addEventListener('click', sendChat);
   $('#chatInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } });
   $('#chatMessages').addEventListener('click', e => { const btn = e.target.closest('.btn-save-thought'); if (btn) saveThought(btn.dataset.save); });
+  $('#chatNewBtn').addEventListener('click', newChat);
   $('#archiveToggle').addEventListener('click', openArchive);
   $('#archiveBack').addEventListener('click', closeArchive);
+  $('#archiveClearAll').addEventListener('click', clearAllChat);
   $('#archiveSearch').addEventListener('input', debounce(searchArchive, 300));
-  $('#archiveList').addEventListener('click', e => { const s = e.target.closest('[data-session-id]'); if (s) loadSession(parseInt(s.dataset.sessionId)); });
-  $('#archiveResults').addEventListener('click', e => { const r = e.target.closest('[data-result-session]'); if (r) loadSession(parseInt(r.dataset.resultSession)); });
+  $('#archiveList').addEventListener('click', e => {
+    const del = e.target.closest('.archive-session-delete');
+    if (del) { e.stopPropagation(); deleteSession(parseInt(del.dataset.delSession)); return; }
+    const s = e.target.closest('[data-session-id]');
+    if (s) openSessionInChat(parseInt(s.dataset.sessionId));
+  });
+  $('#archiveResults').addEventListener('click', e => { const r = e.target.closest('[data-result-session]'); if (r) openSessionInChat(parseInt(r.dataset.resultSession)); });
   const chatBackBtn = $('#chatBackBtn');
   if (chatBackBtn) chatBackBtn.addEventListener('click', () => navigateTo('notes'));
 

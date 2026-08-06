@@ -53,3 +53,4 @@ class DreamReq(BaseModel):
 
 class ChatReq(BaseModel):
     message: str
+    session_id: Optional[int] = None

@@ -1,0 +1,7 @@
+.env
+.git
+screen*.png
+test_all.py
+test_feat.py
+__pycache__
+*.pyc
