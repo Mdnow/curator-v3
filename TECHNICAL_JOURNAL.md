@@ -312,6 +312,69 @@ Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free mod
 
 ---
 
+## 11. Сессия 07.08.2026 — лимит сброшен, три долга закрыты, чистка юзеров
+
+### 11.1. AI на проде после сброса лимита
+
+- Дневной лимит OpenRouter (50 free-запросов/день) сброшен в 00:00 UTC 07.08 — «AI недоступен» был именно лимитом, не поломкой.
+- Live-прогон всех 6 моделей ротации: **4 отвечают 200** (`nemotron-3-super-120b`, `nemotron-3-nano-30b`, `nemotron-3-ultra-550b`, `gpt-oss-20b`), **2 в 429** (`gemma-4-26b`, `gemma-4-31b`) — но это **не** `free-models-per-day`, а временный upstream-rate-limit (`limit_source: upstream_provider_shared_pool`, `retry_after_seconds: 24`). Ключ валиден (73 симв.), `is_byok: false`.
+- Вывод: 429 от upstream-провайдера ≠ суточный лимит. Отличать по тексту ошибки: `free-models-per-day` (лимит дня) vs `temporarily rate-limited upstream` (временный, retry через секунды).
+
+### 11.2. Деплои и коммиты
+
+- `51bb480` — `fix: AI_LAST_ERROR diagnostics + pagination clamp + reanalyze error guard` (закоммичены фиксы QA-сессии 06.08, висевшие в рабочей копии).
+- `3145f93` — `feat: backup with AI fields, chat search LIKE escaping, input validation` (три долга, см. §11.3–11.5).
+- Деплой `ffe5a42f` SUCCESS (07.08 07:56 +03:00), прод онлайн, `/api/health` 200.
+
+### 11.3. Бэкап теперь включает AI-поля (долг из §8 закрыт)
+
+**Проблема.** `GET /api/backup` отдавал заметки без `ai_summary/ai_category/ai_sentiment/ai_keyphrases/thread_id/mood`, сны без `emotion_valence/ai_symbols/ai_themes/ai_question/linked_note_ids` — восстановление из бэкапа теряло всю AI-разметку.
+
+**Решение.** `backend/routes/backup.py`: расширены SELECT-запросы и выходные объекты:
+- notes: +`ai_summary`, `ai_category`, `ai_sentiment` (float), `ai_keyphrases` (JSON-массив), `thread_id`, `mood`
+- dreams: +`emotion_valence` (float), `ai_symbols`/`ai_themes` (JSON-массивы), `ai_question`, `linked_note_ids`
+
+**Проверено.** ASGI-тест: `{"ai_summary","ai_category","ai_sentiment","ai_keyphrases","thread_id","mood"} ⊆ notes.keys()` = True.
+
+### 11.4. Экранирование LIKE в поиске чата (долг из §10 закрыт)
+
+**Проблема.** `%` и `_` в `q` работали как SQL-wildcard: поиск «50%» находил все сообщения с «50», «a_b» — «aXb».
+
+**Решение.** `backend/routes/chat.py`, `chat_search`: экранирование перед подстановкой в паттерн:
+```python
+escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+pattern = f"%{escaped}%"
+... WHERE content LIKE $2 ESCAPE '\\'
+```
+**Проверено.** q=`50%` → 1 результат (только точное совпадение), q=`50` → 2 (user+assistant), q=`a_b` → только реальные.
+
+### 11.5. Валидация входных данных (долг из §10 закрыт)
+
+**Проблема.** Пустые `content`/`title` проходили, ограничения длины не было.
+
+**Решение.** `backend/models.py`: общий хелпер `_check_len(v, field, min, max)` (strip + min/max, ValueError → 422 FastAPI), применён через `field_validator` (pydantic 2.9):
+- `NoteReq.content` 1..20000, `note_date` 1..10; `NoteUpdateReq.content` 1..20000
+- `TaskReq.title` 1..500, `description` 1..20000 (пустая — ок); `TaskUpdateReq` аналогично
+- `DreamReq.content` 1..20000
+- `ChatReq.message` 1..10000
+
+**Проверено.** ASGI-тест: пустые/whitespace/переполненные → 422, валидные → 200. Фронт уже блокирует пустое (`if (!content) return`), так что UX не сломан.
+
+### 11.6. Чистка тестовых юзеров из прод-БД
+
+- Удалены 4: `marina_test_pg` (id 2, была 1 заметка), `migrationtest` (id 11), `test` (id 12), `qa_val` (id 19, временный от ASGI-тестов).
+- В прод-БД остался только `mdnow` (id 3).
+- Инструмент: Python-скрипт `asyncpg` (DELETE по таблицам-справочникам, перебор через `information_schema.tables`), вызов через `python script.py "$DATABASE_URL"` — потому что строка в `python -c` с кавычками ломается в PS 5.1 (§7.4).
+
+### 11.7. Направление продукта (решение пользователя)
+
+- **Раздел «Задачи» не используется** — психологически давит (дефицит-мышление). Решение: заменить слоем **«проявленные цели»** — куратор как когнитивное зеркало: цели выводятся из суммарных заметок, без чекбоксов/дат/статусов.
+- Референс-механики: Mem AI (mem.ai) — folderless «Capture, then Converse», Discovery Engine (находит связи, которых не искали), Heads Up, Actionable Chat («собери мне из заметок»). Варианты А (список проявленных целей с цитатами-источниками) и Б (цель-диалог: куратор раскрывает цитаты + вопрос) одобрены.
+- Вход всегда один — заметки; цели — выход куратора, не долг. Технический фундамент уже есть: `thread_id`, AI-категории, паттерны, избранное. Новое — `goals`-слой (не внедрено, проектируется).
+- Переанализ старых заметок **не запускался** (решение пользователя: не структурировать всё подряд с учётом лимитов).
+
+---
+
 ## Быстрые команды (памятка)
 
 ```powershell
