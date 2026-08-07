@@ -406,6 +406,9 @@ async def generate_goals(notes_text: str) -> dict:
                 )
         if len(quotes) < 2:
             continue
+        # цитаты должны быть из разных заметок — иначе нет «проявленного вектора»
+        if len({q["note_id"] for q in quotes}) < 2:
+            continue
         clean.append(
             {
                 "title": title[:80],
