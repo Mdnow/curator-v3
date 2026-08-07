@@ -16,7 +16,7 @@ async def _analyze_in_background(note_id: int, content: str, user_id: int):
 
     pool = await get_pool()
     async with pool.acquire() as db:
-        if ai.get("summary") or ai.get("category"):
+        if ai.get("error") is None and (ai.get("summary") or ai.get("category")):
             await db.execute(
                 "UPDATE notes SET ai_summary=$1, ai_category=$2, ai_sentiment=$3, ai_keyphrases=$4 WHERE id=$5",
                 ai.get("summary", ""),
@@ -73,6 +73,8 @@ async def get_notes(
     date: str, page: int = 1, limit: int = 50, user_id: int = Depends(get_current_user)
 ):
     async with get_db() as db:
+        page = max(page, 1)
+        limit = min(max(limit, 1), 100)
         offset = (page - 1) * limit
         rows = await db.fetch(
             """SELECT id, content_encrypted, note_date, tags, is_favorited,
@@ -167,7 +169,7 @@ async def _reanalyze_in_background(note_ids: list[int], user_id: int):
             if not content or not content.strip():
                 continue
             ai = await analyze_note(content)
-            if ai.get("summary") or ai.get("category"):
+            if ai.get("error") is None and (ai.get("summary") or ai.get("category")):
                 await db.execute(
                     "UPDATE notes SET ai_summary=$1, ai_category=$2, ai_sentiment=$3, ai_keyphrases=$4 WHERE id=$5",
                     ai.get("summary", ""),

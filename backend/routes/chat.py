@@ -186,6 +186,8 @@ async def chat_history(
     page: int = 1, limit: int = 50, user_id: int = Depends(get_current_user)
 ):
     async with get_db() as db:
+        page = max(page, 1)
+        limit = min(max(limit, 1), 100)
         offset = (page - 1) * limit
         rows = await db.fetch(
             """SELECT role, content, created_at

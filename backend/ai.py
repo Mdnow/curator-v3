@@ -102,6 +102,9 @@ THREAD_SUGGEST_PROMPT = """Ты — система навигации мысле
 Только JSON, без markdown."""
 
 
+AI_LAST_ERROR = ""
+
+
 def _parse_json_content(content: str | None) -> dict | None:
     if not content:
         return None
@@ -138,6 +141,13 @@ async def _request_model(
             },
         )
         if r.status_code == 429:
+            global AI_LAST_ERROR
+            try:
+                err = r.json().get("error", {}).get("message", "")
+            except Exception:
+                err = r.text[:300]
+            if err:
+                AI_LAST_ERROR = err
             print(f"[ai] {model} -> 429", flush=True)
             return None
         if r.status_code >= 400:
@@ -217,13 +227,16 @@ async def analyze_note(text: str) -> dict:
         ANALYZE_NOTE_PROMPT + text, temperature=0.3, max_tokens=500
     )
     if data is None:
+        err = ""
+        if AI_LAST_ERROR and "rate limit" in AI_LAST_ERROR.lower():
+            err = ": бесплатный лимит на сегодня исчерпан (50 запросов/день, сброс 00:00 UTC). Добавь $10 на openrouter.ai, чтобы получить 1000 запросов/день"
         return {
             "summary": "",
             "category": "без категории",
             "sentiment": 0.0,
             "keyphrases": [],
             "thread_hint": None,
-            "error": "AI недоступен",
+            "error": ("AI недоступен" + err),
         }
 
     return {
@@ -364,4 +377,6 @@ async def chat_with_context(messages: list[dict], system: str = "") -> str:
                 if content:
                     return content
 
+    if AI_LAST_ERROR and "rate limit" in AI_LAST_ERROR.lower():
+        return "Бесплатный лимит OpenRouter на сегодня исчерпан (50 запросов/день, сброс в 00:00 UTC). Добавь $10 на openrouter.ai, чтобы получить 1000 запросов в день."
     return "AI временно недоступен. Попробуй через минуту."
