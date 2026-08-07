@@ -85,6 +85,7 @@ function loadPageData() {
     case 'notes': loadNotes(); break;
     case 'tasks': loadTasks(); break;
     case 'goals': loadGoals(); break;
+    case 'daymap': loadDayMap(); break;
     case 'dreams': loadDreams(); break;
     case 'chat': showChat(); break;
     case 'patterns': loadPatterns(); break;
@@ -142,7 +143,7 @@ function goToday() { selectedDate = todayStr(); const n = new Date(); calYear = 
 function renderPageTitle() {
   const d = new Date(selectedDate + 'T12:00:00');
   const today = selectedDate === todayStr();
-  const titles = { notes: 'Заметки', goals: 'Цели', tasks: 'Задачи', dreams: 'Сон', chat: 'Куратор', patterns: 'Паттерны' };
+  const titles = { notes: 'Заметки', goals: 'Цели', tasks: 'Задачи', daymap: 'Карта', dreams: 'Сон', chat: 'Куратор', patterns: 'Паттерны' };
   $('#pageTitle').textContent = titles[currentPage] || '';
   if (currentPage === 'notes' || currentPage === 'tasks') {
     $('#pageSubtitle').textContent = today ? 'Сегодня' : d.getDate() + ' ' + RU_MONTHS_GEN[d.getMonth()] + ', ' + RU_DAYS[d.getDay()];
@@ -157,7 +158,7 @@ function updateMobileHeader() {
   if (!isMobile()) return;
   const d = new Date(selectedDate + 'T12:00:00');
   const today = selectedDate === todayStr();
-  const titles = { notes: 'ЗАМЕТКИ', goals: 'ЦЕЛИ', tasks: 'ЗАДАЧИ', dreams: 'СОН', chat: 'КУРАТОР', patterns: 'ПАТТЕРНЫ' };
+  const titles = { notes: 'ЗАМЕТКИ', goals: 'ЦЕЛИ', tasks: 'ЗАДАЧИ', daymap: 'КАРТА', dreams: 'СОН', chat: 'КУРАТОР', patterns: 'ПАТТЕРНЫ' };
   const el = $('#mobileHeaderTitle');
   if (el) el.textContent = titles[currentPage] || '';
   const dateEl = $('#mobileHeaderDate');
@@ -495,6 +496,105 @@ async function deleteGoal(id) {
   try { await api('DELETE', '/goals/' + id); toast('удалено'); await loadGoals(); } catch (e) { toast('ошибка'); }
 }
 
+// ═══ Day Map ═══
+async function loadDayMap() {
+  hideAllSections(); $('#dayMapSection').style.display = 'block';
+  const bubblesEl = $('#daymapBubbles');
+  const phrasesEl = $('#daymapPhrases');
+  const threadsEl = $('#daymapThreads');
+  const essenceEl = $('#daymapEssence');
+  const emptyEl = $('#daymapEmpty');
+  const notesEl = $('#daymapNotes');
+  bubblesEl.innerHTML = '<div class="patterns-loading">собираю карту...</div>';
+  phrasesEl.innerHTML = ''; threadsEl.innerHTML = '';
+  essenceEl.style.display = 'none'; notesEl.style.display = 'none';
+
+  try {
+    const data = await api('GET', '/insights/day-map?date=' + selectedDate);
+    if (!data.total) {
+      bubblesEl.innerHTML = '';
+      emptyEl.style.display = 'block';
+      return;
+    }
+    emptyEl.style.display = 'none';
+
+    if (data.essence) {
+      essenceEl.style.display = 'block';
+      essenceEl.innerHTML = `<span class="daymap-essence-mark">&#9678;</span> <span>${esc(data.essence)}</span>`;
+    }
+
+    bubblesEl.innerHTML = renderBubbles(data);
+    phrasesEl.innerHTML = data.phrases.length
+      ? data.phrases.map(p => `<div class="daymap-phrase"><span class="daymap-phrase-text">${esc(p.phrase)}</span><span class="daymap-phrase-count">${p.count}</span></div>`).join('')
+      : '<div class="daymap-muted">нет ключевых фраз</div>';
+    threadsEl.innerHTML = data.threads.length
+      ? data.threads.map(t => `<button class="daymap-thread" data-thread-id="${esc(t.thread_id)}"><span class="daymap-thread-count">${t.count}</span> <span class="daymap-thread-preview">${esc(t.preview)}</span></button>`).join('')
+      : '<div class="daymap-muted">нитей дня нет</div>';
+  } catch (e) {
+    bubblesEl.innerHTML = '<div class="patterns-loading">ошибка загрузки</div>';
+  }
+}
+
+function renderBubbles(data) {
+  const maxCount = Math.max(1, ...data.categories.map(c => c.count));
+  let html = '';
+  for (const c of data.categories) {
+    const r = 26 + Math.round((c.count / maxCount) * 34);
+    const hue = Math.round(((c.sentiment + 1) / 2) * 120);
+    const color = `hsla(${hue}, 55%, 55%, 0.35)`;
+    const border = `hsla(${hue}, 60%, 55%, 0.9)`;
+    html += `<button class="daymap-bubble" data-cat="${esc(c.name)}" title="${esc(c.name)} · ${c.count} мыслей · настрой ${c.sentiment > 0 ? '+' : ''}${c.sentiment}"
+      style="width:${r*2}px;height:${r*2}px;background:${color};border-color:${border}">
+      <span class="daymap-bubble-label">${esc(c.name)}</span>
+      <span class="daymap-bubble-count">${c.count}</span>
+    </button>`;
+  }
+  if (!data.categories.length) {
+    return '<div class="daymap-muted">темы не определены (заметки без категории)</div>';
+  }
+  return html;
+}
+
+async function showDayMapNotes(category) {
+  const notesEl = $('#daymapNotes');
+  try {
+    const notes = await api('GET', '/notes?date=' + selectedDate);
+    const filtered = notes.filter(n => n.ai_category === category);
+    if (!filtered.length) { notesEl.style.display = 'none'; return; }
+    notesEl.style.display = 'block';
+    notesEl.innerHTML = `<div class="daymap-notes-title">${esc(category)}</div>` +
+      filtered.map(n => `<div class="daymap-note">${esc(n.content)}</div>`).join('');
+  } catch (e) { toast('ошибка'); }
+}
+
+async function generateDayEssence() {
+  const btn = $('#daymapEssenceBtn');
+  const essenceEl = $('#daymapEssence');
+  try {
+    btn.disabled = true; btn.textContent = '...';
+    essenceEl.style.display = 'block';
+    essenceEl.innerHTML = '<div class="ai-dot"></div> думаю о дне...';
+    await api('POST', '/insights/day-map/' + selectedDate + '/essence');
+    setTimeout(async () => {
+      try {
+        const data = await api('GET', '/insights/day-map?date=' + selectedDate);
+        essenceEl.innerHTML = data.essence
+          ? `<span class="daymap-essence-mark">&#9678;</span> <span>${esc(data.essence)}</span>`
+          : 'AI не вернул фразу';
+      } catch (e) {}
+    }, 3000);
+    setTimeout(() => {
+      const t = $('#toast');
+      if (t) toast('фраза готова');
+    }, 4000);
+  } catch (e) {
+    essenceEl.style.display = 'none';
+    toast(e.message || 'ошибка');
+  } finally {
+    btn.disabled = false; btn.textContent = '&#9678; фраза дня';
+  }
+}
+
 // ═══ Dreams ═══
 async function loadDreams() {
   hideAllSections(); $('#dreamsSection').style.display = 'block';
@@ -766,6 +866,7 @@ function hideAllSections() {
   $('#notesSection').style.display = 'none';
   $('#tasksSection').style.display = 'none';
   $('#goalsSection').style.display = 'none';
+  $('#dayMapSection').style.display = 'none';
   $('#dreamsSection').style.display = 'none';
   $('#chatSection').classList.remove('active');
   $('#patternsSection').style.display = 'none';
@@ -961,6 +1062,15 @@ document.addEventListener('DOMContentLoaded', () => {
       renderCalendar(); renderPageTitle();
       navigateTo('notes');
     }
+  });
+
+  // Day Map
+  $('#daymapEssenceBtn').addEventListener('click', generateDayEssence);
+  $('#dayMapSection').addEventListener('click', e => {
+    const bubble = e.target.closest('[data-cat]');
+    if (bubble) { showDayMapNotes(bubble.dataset.cat); return; }
+    const thread = e.target.closest('[data-thread-id]');
+    if (thread) { navigateTo('notes'); }
   });
 
   // Dreams

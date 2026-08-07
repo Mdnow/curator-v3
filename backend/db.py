@@ -161,6 +161,17 @@ async def init_db():
         await db.execute(
             "CREATE INDEX IF NOT EXISTS idx_goals_user ON goals(user_id, created_at)"
         )
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS day_essences (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                date TEXT NOT NULL,
+                essence TEXT NOT NULL DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (user_id, date)
+            )
+        """)
 
         # Indexes — safe to create repeatedly
         await db.execute(

@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="/css/notes.css?v=6">
   <link rel="stylesheet" href="/css/tasks.css?v=6">
   <link rel="stylesheet" href="/css/goals.css?v=6">
+  <link rel="stylesheet" href="/css/daymap.css?v=6">
   <link rel="stylesheet" href="/css/dreams.css?v=6">
   <link rel="stylesheet" href="/css/chat.css?v=6">
   <link rel="stylesheet" href="/css/patterns.css?v=6">
@@ -86,6 +87,10 @@
       <span class="mobile-tab-icon">&#9873;</span>
       <span>Цели</span>
     </button>
+    <button class="mobile-tab" data-page="daymap">
+      <span class="mobile-tab-icon">&#9678;</span>
+      <span>Карта</span>
+    </button>
     <button class="mobile-tab" data-page="dreams">
       <span class="mobile-tab-icon">☽</span>
       <span>Сон</span>
@@ -136,6 +141,9 @@
         </button>
         <button class="nav-btn" data-page="goals">
           <span class="nav-icon">&#9873;</span> Цели
+        </button>
+        <button class="nav-btn" data-page="daymap">
+          <span class="nav-icon">&#9678;</span> Карта
         </button>
         <button class="nav-btn" data-page="dreams">
           <span class="nav-icon">&#127769;</span> Сон
@@ -240,6 +248,31 @@
         <div class="goals-empty" id="goalsEmpty" style="display:none">
           <div class="empty-icon">&#9873;</div>
           <div class="empty-text">целей пока нет — нажми «обновить цели»</div>
+        </div>
+      </div>
+
+      <!-- Day Map -->
+      <div id="dayMapSection" style="display:none">
+        <div class="daymap-toolbar">
+          <button class="btn btn-small" id="daymapEssenceBtn" title="в чём ты варилась в этот день (1 AI-запрос)">&#9678; фраза дня</button>
+          <span class="daymap-hint">круги — темы дня · размер = объём мыслей · цвет = настрой</span>
+        </div>
+        <div class="daymap-essence" id="daymapEssence" style="display:none"></div>
+        <div class="daymap-bubbles" id="daymapBubbles"></div>
+        <div class="daymap-notes" id="daymapNotes" style="display:none"></div>
+        <div class="daymap-grid">
+          <div class="daymap-col">
+            <div class="daymap-col-title">фразы дня</div>
+            <div class="daymap-phrases" id="daymapPhrases"></div>
+          </div>
+          <div class="daymap-col">
+            <div class="daymap-col-title">нити дня</div>
+            <div class="daymap-threads" id="daymapThreads"></div>
+          </div>
+        </div>
+        <div class="daymap-empty" id="daymapEmpty" style="display:none">
+          <div class="empty-icon">&#9678;</div>
+          <div class="empty-text">в этот день заметок нет</div>
         </div>
       </div>
 

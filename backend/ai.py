@@ -132,6 +132,20 @@ GOALS_PROMPT = """Ты — когнитивное зеркало. Проанал
 
 Только JSON, без markdown."""
 
+DAY_ESSENCE_PROMPT = """Ты — когнитивное зеркало. Посмотри заметки за один день и скажи в двух-трёх предложениях, в чём человек варился в этот день.
+
+Говори только фактами из заметок: главные темы, повторяющиеся мысли, эмоциональный фон, что перетекало из других дней. Без оценок, без советов, без «ты».
+
+ВЕРНИ JSON:
+{{
+  "essence": "2-3 предложения"
+}}
+
+ЗАМЕТКИ ДНЯ:
+{notes}
+
+Только JSON, без markdown."""
+
 
 AI_LAST_ERROR = ""
 
@@ -425,6 +439,25 @@ async def generate_goals(notes_text: str) -> dict:
     if not clean:
         return {"error": "AI вернул цели без цитат-источников."}
     return {"goals": clean}
+
+
+async def day_essence(notes_text: str) -> dict:
+    """Возвращает {"essence": str} или {"error": str} при сбое."""
+    if not OPENROUTER_API_KEY:
+        return {"error": "API ключ не настроен."}
+
+    prompt = DAY_ESSENCE_PROMPT.format(notes=notes_text or "(нет заметок)")
+    data = await call_ai_json(prompt, temperature=0.4, max_tokens=300)
+    if data is None:
+        err = ""
+        if AI_LAST_ERROR and "rate limit" in AI_LAST_ERROR.lower():
+            err = ": бесплатный лимит на сегодня исчерпан (50 запросов/день, сброс 00:00 UTC)"
+        return {"error": "AI недоступен" + err}
+
+    essence = str(data.get("essence", "")).strip()
+    if not essence:
+        return {"error": "AI не вернул фразу."}
+    return {"essence": essence[:500]}
 
 
 CHAT_SYSTEM = """Ты — Куратор, AI-ассистент внутри приложения для заметок.
