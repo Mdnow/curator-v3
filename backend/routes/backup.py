@@ -13,7 +13,8 @@ async def backup_data(user_id: int = Depends(get_current_user)):
     async with get_db() as db:
         notes_rows = await db.fetch(
             """SELECT id, content_encrypted, note_date, tags,
-                      is_favorited, created_at
+                      is_favorited, ai_summary, ai_category, ai_sentiment,
+                      ai_keyphrases, thread_id, mood, created_at
                FROM notes WHERE user_id=$1 ORDER BY created_at""",
             user_id,
         )
@@ -23,6 +24,12 @@ async def backup_data(user_id: int = Depends(get_current_user)):
                 content = decrypt(r["content_encrypted"])
             except Exception:
                 content = ""
+            keyphrases = []
+            if r["ai_keyphrases"]:
+                try:
+                    keyphrases = json.loads(r["ai_keyphrases"])
+                except Exception:
+                    pass
             notes.append(
                 {
                     "id": r["id"],
@@ -30,6 +37,14 @@ async def backup_data(user_id: int = Depends(get_current_user)):
                     "note_date": r["note_date"],
                     "tags": json.loads(r["tags"]) if r["tags"] else [],
                     "is_favorited": r["is_favorited"],
+                    "ai_summary": r["ai_summary"] or "",
+                    "ai_category": r["ai_category"] or "",
+                    "ai_sentiment": float(r["ai_sentiment"])
+                    if r["ai_sentiment"]
+                    else 0.0,
+                    "ai_keyphrases": keyphrases,
+                    "thread_id": r["thread_id"] or "",
+                    "mood": r["mood"] or "",
                     "created_at": str(r["created_at"]) if r["created_at"] else "",
                 }
             )
@@ -72,7 +87,8 @@ async def backup_data(user_id: int = Depends(get_current_user)):
         dream_rows = await db.fetch(
             """SELECT id, content_encrypted, dream_type, sleep_time,
                       wake_time, sleep_quality, emotion_label,
-                      ai_summary, created_at
+                      emotion_valence, ai_symbols, ai_themes,
+                      ai_summary, ai_question, linked_note_ids, created_at
                FROM dreams WHERE user_id=$1 ORDER BY created_at""",
             user_id,
         )
@@ -82,6 +98,8 @@ async def backup_data(user_id: int = Depends(get_current_user)):
                 content = decrypt(r["content_encrypted"])
             except Exception:
                 content = ""
+            symbols = json.loads(r["ai_symbols"]) if r["ai_symbols"] else []
+            themes = json.loads(r["ai_themes"]) if r["ai_themes"] else []
             dreams.append(
                 {
                     "id": r["id"],
@@ -91,7 +109,14 @@ async def backup_data(user_id: int = Depends(get_current_user)):
                     "wake_time": r["wake_time"] or "",
                     "sleep_quality": r["sleep_quality"],
                     "emotion_label": r["emotion_label"] or "",
+                    "emotion_valence": float(r["emotion_valence"])
+                    if r["emotion_valence"]
+                    else 0.0,
+                    "ai_symbols": symbols,
+                    "ai_themes": themes,
                     "ai_summary": r["ai_summary"] or "",
+                    "ai_question": r["ai_question"] or "",
+                    "linked_note_ids": r["linked_note_ids"] or [],
                     "created_at": str(r["created_at"]) if r["created_at"] else "",
                 }
             )

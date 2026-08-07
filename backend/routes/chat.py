@@ -309,11 +309,12 @@ async def chat_search(q: str = "", user_id: int = Depends(get_current_user)):
     async with get_db() as db:
         if not q.strip():
             return []
-        pattern = f"%{q}%"
+        escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{escaped}%"
         rows = await db.fetch(
             """SELECT role, content, created_at, session_id
                FROM chat_history
-               WHERE user_id=$1 AND content LIKE $2
+               WHERE user_id=$1 AND content LIKE $2 ESCAPE '\\'
                ORDER BY created_at DESC LIMIT 50""",
             user_id,
             pattern,
