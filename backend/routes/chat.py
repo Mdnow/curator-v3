@@ -7,7 +7,6 @@ from backend.models import ChatReq
 from backend.ai import chat_with_context, CHAT_SYSTEM
 from datetime import datetime, timedelta
 import json
-import re
 import asyncio
 
 router = APIRouter(prefix="/api", tags=["chat"])
@@ -124,24 +123,6 @@ async def ai_chat(req: ChatReq, user_id: int = Depends(get_current_user)):
 
         result = await chat_with_context(history, system=system)
 
-        auto_saved = []
-        auto_match = re.search(r"\[AUTO_SAVE:(.+?)\]", result, re.DOTALL)
-        if auto_match:
-            thought_text = auto_match.group(1).strip()
-            result = re.sub(r"\[AUTO_SAVE:.+?\]", "", result, flags=re.DOTALL).strip()
-            today = datetime.now().date().isoformat()
-            enc = encrypt(thought_text)
-            await db.execute(
-                """INSERT INTO notes (user_id, content_encrypted, note_date, tags, ai_category)
-                   VALUES ($1,$2,$3,$4,$5)""",
-                user_id,
-                enc,
-                today,
-                "[]",
-                "Цитаты",
-            )
-            auto_saved.append(thought_text)
-
         await db.execute(
             """INSERT INTO chat_history (user_id, role, content, session_id)
                VALUES ($1,$2,$3,$4)""",
@@ -151,7 +132,7 @@ async def ai_chat(req: ChatReq, user_id: int = Depends(get_current_user)):
             session_id,
         )
 
-        return {"reply": result, "auto_saved": auto_saved, "session_id": session_id}
+        return {"reply": result, "auto_saved": [], "session_id": session_id}
 
 
 @router.post("/ai/save-thought")

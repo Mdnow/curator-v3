@@ -94,6 +94,19 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # Embeddings for semantic search (pgvector)
+        await db.execute("CREATE EXTENSION IF NOT EXISTS vector")
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS note_embeddings (
+                note_id INTEGER PRIMARY KEY REFERENCES notes(id) ON DELETE CASCADE,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                embedding vector(2048),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_note_embeddings_user ON note_embeddings(user_id)"
+        )
         # Migrate existing v2 tables — add missing columns
         note_cols = await db.fetch(
             "SELECT column_name FROM information_schema.columns WHERE table_name='notes'"
@@ -130,6 +143,24 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS goals (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                evidence TEXT DEFAULT '[]',
+                thread_ids TEXT DEFAULT '[]',
+                categories TEXT DEFAULT '[]',
+                source_count INTEGER NOT NULL DEFAULT 0,
+                is_pinned INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_goals_user ON goals(user_id, created_at)"
+        )
 
         # Indexes — safe to create repeatedly
         await db.execute(

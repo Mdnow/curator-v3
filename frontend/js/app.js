@@ -84,6 +84,7 @@ function loadPageData() {
   switch (currentPage) {
     case 'notes': loadNotes(); break;
     case 'tasks': loadTasks(); break;
+    case 'goals': loadGoals(); break;
     case 'dreams': loadDreams(); break;
     case 'chat': showChat(); break;
     case 'patterns': loadPatterns(); break;
@@ -141,7 +142,7 @@ function goToday() { selectedDate = todayStr(); const n = new Date(); calYear = 
 function renderPageTitle() {
   const d = new Date(selectedDate + 'T12:00:00');
   const today = selectedDate === todayStr();
-  const titles = { notes: 'Заметки', tasks: 'Задачи', dreams: 'Сон', chat: 'Куратор', patterns: 'Паттерны' };
+  const titles = { notes: 'Заметки', goals: 'Цели', tasks: 'Задачи', dreams: 'Сон', chat: 'Куратор', patterns: 'Паттерны' };
   $('#pageTitle').textContent = titles[currentPage] || '';
   if (currentPage === 'notes' || currentPage === 'tasks') {
     $('#pageSubtitle').textContent = today ? 'Сегодня' : d.getDate() + ' ' + RU_MONTHS_GEN[d.getMonth()] + ', ' + RU_DAYS[d.getDay()];
@@ -156,7 +157,7 @@ function updateMobileHeader() {
   if (!isMobile()) return;
   const d = new Date(selectedDate + 'T12:00:00');
   const today = selectedDate === todayStr();
-  const titles = { notes: 'ЗАМЕТКИ', tasks: 'ЗАДАЧИ', dreams: 'СОН', chat: 'КУРАТОР', patterns: 'ПАТТЕРНЫ' };
+  const titles = { notes: 'ЗАМЕТКИ', goals: 'ЦЕЛИ', tasks: 'ЗАДАЧИ', dreams: 'СОН', chat: 'КУРАТОР', patterns: 'ПАТТЕРНЫ' };
   const el = $('#mobileHeaderTitle');
   if (el) el.textContent = titles[currentPage] || '';
   const dateEl = $('#mobileHeaderDate');
@@ -221,6 +222,22 @@ function clusterNotes(notes) {
   const groups = {};
   for (const note of notes) { const cat = note.ai_category || 'Другое'; if (!groups[cat]) groups[cat] = []; groups[cat].push(note); }
   return Object.fromEntries(Object.entries(groups).sort((a, b) => b[1].length - a[1].length));
+}
+
+function hideHeadsUp() { const hu = $('#headsUp'); if (hu) hu.style.display = 'none'; }
+
+function showHeadsUp(related) {
+  const hu = $('#headsUp');
+  const list = $('#headsUpList');
+  if (!hu || !list) return;
+  list.innerHTML = related.map(n => {
+    const snippet = (n.ai_summary || n.content || '').slice(0, 110);
+    return `<div class="heads-up-item" data-related-id="${n.id}" data-related-text="${esc(n.content)}" title="${esc(n.content)}">
+      <span class="heads-up-date">${esc(n.note_date || '')}</span>
+      <span class="heads-up-text">${esc(snippet)}</span>
+    </div>`;
+  }).join('');
+  hu.style.display = 'block';
 }
 
 async function saveNote() {
@@ -418,6 +435,66 @@ async function toggleTask(id) { try { const tasks = await api('GET', '/tasks?dat
 async function deleteTask(id) { try { await api('DELETE', '/tasks/' + id); toast('удалено'); await loadTasks(); } catch (e) {} }
 async function toggleTaskFavorite(id) { try { const r = await api('POST', '/tasks/' + id + '/favorite'); toast(r.is_favorited ? 'в избранном' : 'убрано'); await loadTasks(); } catch (e) { toast('ошибка'); } }
 
+// ═══ Goals ═══
+async function loadGoals() {
+  hideAllSections(); $('#goalsSection').style.display = 'block';
+  try {
+    const goals = await api('GET', '/goals');
+    const listEl = $('#goalsList');
+    const emptyEl = $('#goalsEmpty');
+    if (!goals.length) { listEl.innerHTML = ''; emptyEl.style.display = 'block'; return; }
+    emptyEl.style.display = 'none';
+    listEl.innerHTML = goals.map(renderGoal).join('');
+  } catch (e) {
+    $('#goalsList').innerHTML = '<div class="empty-state"><div class="empty-icon">&#9888;</div><div class="empty-text">ошибка загрузки</div></div>';
+  }
+}
+
+function renderGoal(goal) {
+  const cats = (goal.categories || []).map(c => `<span class="goal-cat">${esc(c)}</span>`).join('');
+  const ev = (goal.evidence || []).map(e =>
+    `<button class="goal-quote" data-goal-date="${esc(e.note_date || '')}">
+       <span class="goal-quote-text">«${esc(e.quote)}»</span>
+       ${e.note_date ? `<span class="goal-quote-date">${esc(e.note_date)}</span>` : ''}
+     </button>`
+  ).join('');
+  return `<div class="goal-card ${goal.is_pinned ? 'pinned' : ''}">
+    <div class="goal-header">
+      <button class="goal-pin" data-goal-pin="${goal.id}" title="закрепить">${goal.is_pinned ? '&#9733;' : '&#9734;'}</button>
+      <div class="goal-title">${esc(goal.title)}</div>
+      <button class="goal-delete" data-goal-delete="${goal.id}" title="удалить">&#10005;</button>
+    </div>
+    ${goal.description ? `<div class="goal-desc">${esc(goal.description)}</div>` : ''}
+    ${cats ? `<div class="goal-cats">${cats}</div>` : ''}
+    ${goal.source_count ? `<div class="goal-sources">${goal.source_count} источника</div>` : ''}
+    <div class="goal-evidence">${ev}</div>
+  </div>`;
+}
+
+async function generateGoals() {
+  const statusEl = $('#goalsStatus');
+  try {
+    statusEl.style.display = 'flex';
+    await api('POST', '/goals/generate');
+    toast('цели генерируются в фоне');
+    setTimeout(loadGoals, 1500);
+    setTimeout(loadGoals, 4000);
+    setTimeout(loadGoals, 8000);
+  } catch (e) {
+    statusEl.style.display = 'none';
+    toast(e.message || 'ошибка');
+  } finally {
+    statusEl.style.display = 'none';
+  }
+}
+
+async function toggleGoalPin(id) {
+  try { await api('POST', '/goals/' + id + '/pin'); await loadGoals(); } catch (e) { toast('ошибка'); }
+}
+async function deleteGoal(id) {
+  try { await api('DELETE', '/goals/' + id); toast('удалено'); await loadGoals(); } catch (e) { toast('ошибка'); }
+}
+
 // ═══ Dreams ═══
 async function loadDreams() {
   hideAllSections(); $('#dreamsSection').style.display = 'block';
@@ -511,8 +588,6 @@ function newChat() {
 }
 
 function parseChatReply(text) {
-  const m = text.match(/\[AUTO_SAVE:(.+?)\]/s);
-  if (m) return { text: text.replace(/\[AUTO_SAVE:.+?\]/s, '').trim(), saveable: m[1].trim() };
   return { text, saveable: null };
 }
 
@@ -534,11 +609,6 @@ async function sendChat() {
     if (result.session_id) currentSessionId = result.session_id;
     const parsed = parseChatReply(result.reply);
     let html = `<div class="chat-msg ai">${esc(parsed.text).replace(/\n/g, '<br>')}</div>`;
-    if (result.auto_saved && result.auto_saved.length) {
-      html += `<div class="chat-auto-saved">мысль сохранена автоматически</div>`;
-    } else if (parsed.saveable) {
-      html += `<div class="chat-save-prompt"><span class="chat-save-text">сохранить как мысль?</span><button class="btn btn-small btn-save-thought" data-save="${esc(parsed.saveable)}">сохранить</button></div>`;
-    }
     messagesEl.innerHTML += html;
   } catch (e) {
     const loadingEl = $('#chatLoading'); if (loadingEl) loadingEl.remove();
@@ -695,6 +765,7 @@ function toggleVoice() {
 function hideAllSections() {
   $('#notesSection').style.display = 'none';
   $('#tasksSection').style.display = 'none';
+  $('#goalsSection').style.display = 'none';
   $('#dreamsSection').style.display = 'none';
   $('#chatSection').classList.remove('active');
   $('#patternsSection').style.display = 'none';
@@ -808,6 +879,37 @@ document.addEventListener('DOMContentLoaded', () => {
   noteInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveNote(); } });
   $('#saveBtn').addEventListener('click', saveNote);
 
+  // Heads Up — похожие прошлые заметки при вводе
+  let headsUpTimer = null;
+  noteInput.addEventListener('input', () => {
+    clearTimeout(headsUpTimer);
+    const text = noteInput.value.trim();
+    if (text.length < 12) { hideHeadsUp(); return; }
+    headsUpTimer = setTimeout(async () => {
+      try {
+        const related = await api('POST', '/notes/related', { content: text, limit: 3 });
+        if (related && related.length && noteInput.value.trim().length >= 12) {
+          showHeadsUp(related);
+        } else { hideHeadsUp(); }
+      } catch (e) { hideHeadsUp(); }
+    }, 1400);
+  });
+  noteInput.addEventListener('focus', () => { if (noteInput.value.trim().length >= 12) {} });
+  document.addEventListener('click', (e) => {
+    const hu = $('#headsUp');
+    if (hu && !hu.contains(e.target) && e.target !== noteInput) hideHeadsUp();
+  });
+  $('#headsUpList').addEventListener('click', e => {
+    const item = e.target.closest('.heads-up-item');
+    if (!item) return;
+    const relatedText = (item.dataset.relatedText || '').slice(0, 300);
+    const draft = $('#noteInput').value.trim().slice(0, 200);
+    $('#chatInput').value = 'Моя прошлая заметка: «' + relatedText + '». А сейчас я пишу: «' + draft + '». Как это связано?';
+    hideHeadsUp();
+    navigateTo('chat');
+    $('#chatInput').focus();
+  });
+
   // Voice
   initVoice();
   $('#voiceBtn').addEventListener('click', toggleVoice);
@@ -846,6 +948,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (del) deleteTask(parseInt(del.dataset.taskDelete));
   });
 
+  // Goals
+  $('#goalsRefreshBtn').addEventListener('click', generateGoals);
+  $('#goalsSection').addEventListener('click', e => {
+    const pin = e.target.closest('[data-goal-pin]');
+    if (pin) { toggleGoalPin(parseInt(pin.dataset.goalPin)); return; }
+    const del = e.target.closest('[data-goal-delete]');
+    if (del) { deleteGoal(parseInt(del.dataset.goalDelete)); return; }
+    const quote = e.target.closest('[data-goal-date]');
+    if (quote && quote.dataset.goalDate) {
+      selectedDate = quote.dataset.goalDate;
+      renderCalendar(); renderPageTitle();
+      navigateTo('notes');
+    }
+  });
+
   // Dreams
   $$('.dream-mode').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -872,8 +989,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Chat
   $('#chatSend').addEventListener('click', sendChat);
   $('#chatInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } });
-  $('#chatMessages').addEventListener('click', e => { const btn = e.target.closest('.btn-save-thought'); if (btn) saveThought(btn.dataset.save); });
-  $('#chatNewBtn').addEventListener('click', newChat);
+  $('#chatMessages').addEventListener('click', e => { const btn = e.target.closest('.btn-save-thought'); if (btn) saveThought(btn.dataset.save); });  $('#chatNewBtn').addEventListener('click', newChat);
   $('#archiveToggle').addEventListener('click', openArchive);
   $('#archiveBack').addEventListener('click', closeArchive);
   $('#archiveClearAll').addEventListener('click', clearAllChat);
@@ -913,7 +1029,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('keydown', e => {
     if (e.ctrlKey || e.metaKey) {
       if (e.key === 'n') { e.preventDefault(); navigateTo('notes'); $('#noteInput').focus(); }
-      if (e.key === 'd') { e.preventDefault(); navigateTo('tasks'); }
+      if (e.key === 'd') { e.preventDefault(); navigateTo('goals'); }
       if (e.key === 'k') { e.preventDefault(); navigateTo('chat'); $('#chatInput').focus(); }
     }
     if (e.key === 'Escape' && drawerOpen) closeDrawer();

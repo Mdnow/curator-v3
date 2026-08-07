@@ -11,11 +11,26 @@ router = APIRouter(prefix="/api/notes", tags=["notes"])
 
 async def _analyze_in_background(note_id: int, content: str, user_id: int):
     from backend.db import get_pool
+    from backend.ai import embed_text
 
     ai = await analyze_note(content)
 
     pool = await get_pool()
     async with pool.acquire() as db:
+        vec = await embed_text(content)
+        if vec:
+            try:
+                await db.execute(
+                    """INSERT INTO note_embeddings (note_id, user_id, embedding)
+                       VALUES ($1,$2,$3)
+                       ON CONFLICT (note_id) DO UPDATE SET embedding=$3""",
+                    note_id,
+                    user_id,
+                    str(vec),
+                )
+            except Exception as e:
+                print(f"[embed] save note_id={note_id} -> {e}", flush=True)
+
         if ai.get("error") is None and (ai.get("summary") or ai.get("category")):
             await db.execute(
                 "UPDATE notes SET ai_summary=$1, ai_category=$2, ai_sentiment=$3, ai_keyphrases=$4 WHERE id=$5",
@@ -273,6 +288,54 @@ async def toggle_note_favorite(note_id: int, user_id: int = Depends(get_current_
             user_id,
         )
         return {"is_favorited": new_val}
+
+
+@router.post("/related")
+async def find_related(req: dict, user_id: int = Depends(get_current_user)):
+    """Heads Up: найти заметки, похожие на черновик, по косинусной близости."""
+    from backend.ai import embed_text
+    from pydantic import BaseModel
+
+    class RelatedReq(BaseModel):
+        content: str
+        exclude_id: int | None = None
+        limit: int = 3
+
+    r = RelatedReq(**req)
+    query_vec = await embed_text(r.content)
+    if not query_vec:
+        return []
+
+    async with get_db() as db:
+        rows = await db.fetch(
+            """SELECT ne.note_id, ne.embedding, n.content_encrypted, n.note_date,
+                      n.ai_summary, n.ai_category
+               FROM note_embeddings ne
+               JOIN notes n ON n.id = ne.note_id
+               WHERE ne.user_id = $1 AND ($2 IS NULL OR ne.note_id != $2)
+               ORDER BY ne.embedding <-> $3
+               LIMIT $4""",
+            user_id,
+            r.exclude_id,
+            str(query_vec),
+            r.limit,
+        )
+        results = []
+        for row in rows:
+            try:
+                content = decrypt(row["content_encrypted"])
+            except Exception:
+                content = ""
+            results.append(
+                {
+                    "id": row["note_id"],
+                    "content": content[:300],
+                    "note_date": row["note_date"],
+                    "ai_summary": row["ai_summary"] or "",
+                    "ai_category": row["ai_category"] or "",
+                }
+            )
+        return results
 
 
 @router.get("/threads")

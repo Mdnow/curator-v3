@@ -11,6 +11,8 @@ FREE_MODELS = [
     "openai/gpt-oss-20b:free",
 ]
 
+EMBED_MODEL = "nvidia/nemotron-3-embed-1b:free"
+
 ANALYZE_NOTE_PROMPT = """Ты — интуитивный куратор мыслей. Проанализируй текст и верни JSON:
 {
   "summary": "одно предложение — суть заметки",
@@ -99,6 +101,35 @@ THREAD_SUGGEST_PROMPT = """Ты — система навигации мысле
   "thread_name": "название нити (2-4 слова)",
   "confidence": число от 0.0 до 1.0
 }}
+Только JSON, без markdown."""
+
+GOALS_PROMPT = """Ты — когнитивное зеркало. Проанализируй заметки за период и найди 2-5 ПРОЯВЛЕННЫХ ЦЕЛЕЙ: устойчивые направления, к которым пользователь возвращается вновь и вновь.
+
+Цель — НЕ задача и НЕ мечта. Цель = паттерн, подтверждённый цитатами.
+
+ВЕРНИ JSON:
+{{
+  "goals": [
+    {{
+      "title": "2-4 слова",
+      "description": "одно предложение — куда ведёт вектор",
+      "evidence": [{{"quote": "точная цитата из заметки", "note_id": 123}}],
+      "thread_ids": ["uuid"],
+      "categories": ["Саморазвитие"]
+    }}
+  ]
+}}
+
+ПРАВИЛА:
+- Каждая цель обязана иметь минимум 2 цитаты из РАЗНЫХ заметок.
+- Цитата — дословно из текста, не пересказ.
+- Не выдумывай цели, которых нет в данных.
+- 2-5 целей, не больше. Лаконично.
+- note_id бери ТОЛЬКО из предоставленного списка.
+
+ЗАМЕТКИ:
+{notes}
+
 Только JSON, без markdown."""
 
 
@@ -339,21 +370,71 @@ async def thread_suggest(content: str, threads: str) -> dict:
     }
 
 
+async def generate_goals(notes_text: str) -> dict:
+    """Возвращает {"goals": [...]} или {"error": str} при сбое."""
+    if not OPENROUTER_API_KEY:
+        return {"error": "API ключ не настроен."}
+
+    prompt = GOALS_PROMPT.format(notes=notes_text or "(нет заметок)")
+    data = await call_ai_json(prompt, temperature=0.3, max_tokens=1200)
+    if data is None:
+        err = ""
+        if AI_LAST_ERROR and "rate limit" in AI_LAST_ERROR.lower():
+            err = ": бесплатный лимит на сегодня исчерпан (50 запросов/день, сброс 00:00 UTC)"
+        return {"error": "AI недоступен" + err}
+
+    goals = data.get("goals")
+    if not isinstance(goals, list):
+        return {"error": "AI не вернул цели."}
+
+    clean = []
+    for g in goals:
+        if not isinstance(g, dict):
+            continue
+        title = str(g.get("title", "")).strip()
+        evidence = g.get("evidence")
+        if not title or not isinstance(evidence, list) or len(evidence) < 2:
+            continue
+        quotes = []
+        for e in evidence:
+            if isinstance(e, dict) and e.get("quote") and e.get("note_id"):
+                quotes.append(
+                    {
+                        "note_id": e["note_id"],
+                        "quote": str(e["quote"]).strip(),
+                    }
+                )
+        if len(quotes) < 2:
+            continue
+        clean.append(
+            {
+                "title": title[:80],
+                "description": str(g.get("description", "")).strip()[:300],
+                "evidence": quotes,
+                "thread_ids": g.get("thread_ids")
+                if isinstance(g.get("thread_ids"), list)
+                else [],
+                "categories": g.get("categories")
+                if isinstance(g.get("categories"), list)
+                else [],
+            }
+        )
+    if not clean:
+        return {"error": "AI вернул цели без цитат-источников."}
+    return {"goals": clean}
+
+
 CHAT_SYSTEM = """Ты — Куратор, AI-ассистент внутри приложения для заметок.
 
 Твоя главная задача — помогать пользователю думать и структурировать мысли.
 
 ПРАВИЛА:
 1. Будь лаконичным, точным, без воды. Отвечай по-русски.
-2. Если пользователь ЯВНО просит сохранить мысль/цитату ("сохрани", "запиши", "это важно", "запомни", "save") — ТЫ ОБЯЗАН сохранить её.
-   Используй маркер: [AUTO_SAVE:точный текст который нужно сохранить]
-   После этого кратко подтверди что сохранил.
-3. Если пользователь сказал что-то глубокое, важное, ценное — но НЕ просил сохранить — предложи:
-   [AUTO_SAVE:точный текст]
-4. НЕ предлагай сохранять приветствия, вопросы пользователя, технические инструкции.
-5. Давай инсайты, связывай с прошлыми заметками, помогай видеть паттерны.
-6. Если видишь связь с предыдущими заметками — упоминай это.
-7. Задавай вопросы когда уместно — помогай углублять мысль.
+2. НИКОГДА не сохраняй мысли пользователя сам. Сохранение происходит ТОЛЬКО когда пользователь ЯВНО об этом просит (скажет «сохрани», «запиши», «это важно», «запомни», «save»). В этом случае ответь пользователю, что он может нажать кнопку сохранения.
+3. НЕ используй никакие маркеры/скрытые команды в ответах. Отвечай обычным текстом.
+4. Давай инсайты, связывай с прошлыми заметками, помогай видеть паттерны.
+5. Если видишь связь с предыдущими заметками — упоминай это.
+6. Задавай вопросы когда уместно — помогай углублять мысль.
 
 Последние заметки пользователя для контекста:
 """
@@ -380,3 +461,38 @@ async def chat_with_context(messages: list[dict], system: str = "") -> str:
     if AI_LAST_ERROR and "rate limit" in AI_LAST_ERROR.lower():
         return "Бесплатный лимит OpenRouter на сегодня исчерпан (50 запросов/день, сброс в 00:00 UTC). Добавь $10 на openrouter.ai, чтобы получить 1000 запросов в день."
     return "AI временно недоступен. Попробуй через минуту."
+
+
+def cosine_similarity(a: list[float], b: list[float]) -> float:
+    if not a or not b or len(a) != len(b):
+        return 0.0
+    dot = sum(x * y for x, y in zip(a, b))
+    na = sum(x * x for x in a) ** 0.5
+    nb = sum(y * y for y in b) ** 0.5
+    if na == 0 or nb == 0:
+        return 0.0
+    return dot / (na * nb)
+
+
+async def embed_text(text: str) -> list[float] | None:
+    """Вектор текста через бесплатную эмбеддинг-модель OpenRouter."""
+    if not OPENROUTER_API_KEY or not text.strip():
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post(
+                "https://openrouter.ai/api/v1/embeddings",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={"model": EMBED_MODEL, "input": [text[:4000]]},
+            )
+            if r.status_code >= 400:
+                print(f"[embed] -> {r.status_code}", flush=True)
+                return None
+            data = r.json()
+            return data["data"][0]["embedding"]
+    except Exception as e:
+        print(f"[embed] EXC {type(e).__name__}: {str(e)[:150]}", flush=True)
+        return None
