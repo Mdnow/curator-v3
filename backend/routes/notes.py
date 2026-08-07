@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from backend.db import get_db
 from backend.auth import get_current_user
 from backend.crypto import encrypt, decrypt
-from backend.models import NoteReq, NoteUpdateReq
+from backend.models import NoteReq, NoteUpdateReq, ImportNoteReq
 from backend.ai import analyze_note, thread_suggest
 import json
 
@@ -193,6 +193,51 @@ async def _reanalyze_in_background(note_ids: list[int], user_id: int):
                     json.dumps(ai.get("keyphrases", [])),
                     note_id,
                 )
+
+
+@router.post("/import")
+async def import_note(
+    req: ImportNoteReq, bg: BackgroundTasks, user_id: int = Depends(get_current_user)
+):
+    """Импорт готовой заметки с AI-полями. Без повторного AI-анализа и thread_suggest —
+    чтобы не тратить лимит OpenRouter. Делает только embedding для поиска похожих."""
+    from backend.ai import embed_text
+
+    async with get_db() as db:
+        enc = encrypt(req.content)
+        tags_json = json.dumps(req.tags or [])
+        keyphrases_json = json.dumps(req.ai_keyphrases or [])
+        row = await db.fetchrow(
+            """INSERT INTO notes (user_id, content_encrypted, note_date, tags, mood,
+                                 ai_summary, ai_category, ai_sentiment, ai_keyphrases)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id""",
+            user_id,
+            enc,
+            req.note_date,
+            tags_json,
+            req.mood or "",
+            req.ai_summary or "",
+            req.ai_category or "",
+            req.ai_sentiment,
+            keyphrases_json,
+        )
+        note_id = row["id"]
+
+    async def _embed():
+        pool = await get_pool()
+        vec = await embed_text(req.content)
+        if vec:
+            async with pool.acquire() as db:
+                await db.execute(
+                    """INSERT INTO note_embeddings (note_id, user_id, embedding)
+                       VALUES ($1,$2,$3) ON CONFLICT (note_id) DO UPDATE SET embedding=$3""",
+                    note_id,
+                    user_id,
+                    str(vec),
+                )
+
+    bg.add_task(_embed)
+    return {"id": note_id}
 
 
 @router.post("/reanalyze")

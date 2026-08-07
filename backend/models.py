@@ -40,6 +40,27 @@ class NoteReq(BaseModel):
         return _check_len(v, "note_date", 1, 10)
 
 
+class ImportNoteReq(BaseModel):
+    content: str
+    note_date: str
+    tags: list[str] = []
+    mood: Optional[str] = None
+    ai_summary: str = ""
+    ai_category: str = ""
+    ai_sentiment: float = 0.0
+    ai_keyphrases: list[str] = []
+
+    @field_validator("content")
+    @classmethod
+    def _v_content(cls, v: str) -> str:
+        return _check_len(v, "content", 1, 20000)
+
+    @field_validator("note_date")
+    @classmethod
+    def _v_date(cls, v: str) -> str:
+        return _check_len(v, "note_date", 1, 10)
+
+
 class NoteUpdateReq(BaseModel):
     content: Optional[str] = None
     tags: Optional[list[str]] = None
