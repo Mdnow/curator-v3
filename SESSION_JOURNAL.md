@@ -122,3 +122,71 @@
 
 **Открыто/в процессе:**
 - «Путь целей» (следующий запрос): траектория из проявленных целей по времени + связи через общие темы. Решение: сначала бесплатная цепочка из готовых целей, AI-этапы — потом.
+
+---
+
+## Сессия: 2026-08-07 (интеграция с tiktok-watcher: `/api/notes/import` + PURPOSE.md)
+
+**Тема:** внешний вход в зеркало — импорт готовых заметок из tiktok-watcher («Зеркало дня») без повторного AI-анализа; добавлен PURPOSE.md.
+
+**Что сделано:**
+- **`POST /api/notes/import`** (`ImportNoteReq`): content, note_date, tags, mood + готовые `ai_summary/ai_category/ai_sentiment/ai_keyphrases`. Создаёт заметку с AI-разметкой **без** `_analyze_in_background` — не жечь лимит OpenRouter. Единственный фоновый шаг — embedding для related-поиска. Коммит `59399a7`, запушен в GitHub.
+- **`PURPOSE.md`** — первый в проекте: зачем создан куратор, поток, функции, факты, правила.
+
+**Важно (грабли):**
+- На прод куратора эндпоинт **НЕ задеплоен**: пуш в GitHub не триггерит Railway (см. TECHNICAL_JOURNAL §3.1). tiktok-watcher временно ходит на обычный `POST /api/notes` (fallback при 404/405).
+- Логин `mdnow` + пароль проверен: `/api/login` → 200, токен получен.
+
+**Проверено:**
+- Импорт-эндпоинт зарегистрирован в коде (openapi локально), `ImportNoteReq` валиден.
+- Логин в зеркало с Railway-переменными — работает (200).
+
+**Открыто/в процессе:**
+- [ ] Задеплоить куратора на Railway (`691553@bk.ru`) — чтобы `/api/notes/import` поехал и tiktok-watcher вернулся на него (уберём fallback).
+
+---
+
+## Сессия: 2026-08-08 (AI-провайдер → OpenCode Zen, уход от лимита OpenRouter)
+
+**Тема:** по запросу «как использовать бесплатные модели opencode для куратора» переведён AI-слой с OpenRouter на OpenCode Zen. Выяснилось, что big-pickle — это Zen-модель.
+
+**Что сделано:**
+- **Найдено**: big-pickle и ещё 7 моделей — бесплатные модели **OpenCode Zen** (opencode.ai/zen). Эндпоинт OpenAI-совместимый: `https://opencode.ai/zen/v1/chat/completions`. У пользователя уже был доступ (пользуется big-pickle в opencode).
+- **Ключ**: `ZEN_API_KEY` получен на opencode.ai/auth, записан в `.env` (в gitignore, в деплой не уходит).
+- **Рефакторинг** `backend/ai.py` → провайдер-слой `PROVIDERS`: **Zen первым** (big-pickle, deepseek-v4-flash-free, nemotron-3-ultra-free, mimo-v2.5-free + 4 запасных), **OpenRouter fallback** (`OPENROUTER_MODELS`). Все вызывающие (`analyze_note`, `analyze_dream`, `dream_insight`, `daily_patterns`, `thread_suggest`, `generate_goals`, `day_essence`, `chat_with_context`) не менялись.
+- **Таймауты 15с→90с** — big-pickle/deepseek это reasoning-модели, думают дольше 15с (замерено ~11с на простой JSON). **Лимиты токенов подняты** (thread_suggest 200→1000, goals 1200→2000, day_essence 300→800 и др.) — reasoning-токены считаются в `max_tokens`.
+- Сообщения про лимиты нейтрализованы (убраны упоминания OpenRouter/50-в-день).
+- `backend/config.py`: `ZEN_URL`, `ZEN_API_KEY`.
+
+**Проверено:**
+- Прямой вызов Zen: `big-pickle` и `deepseek-v4-flash-free` возвращают 200, отдают чистый русский JSON в `content` (reasoning в отдельном поле — игнорируется).
+- `call_ai_json` через рефакторинг: `providers = ['zen','openrouter']`, заметка про Дубай → корректный JSON от big-pickle.
+- `py_compile` всех тронутых файлов — OK.
+
+**Не проверено / открыто:**
+- Полный серверный смоук-тест **не прошёл**: Neon рвёт соединение на ~26с (`ConnectionDoesNotExistError: connection was closed in the middle of operation`) — сеть/VPN пользователя нестабильна, не код. Проверить `python test_feat.py` когда сеть стабилизируется.
+- **Приватность**: big-pickle в бесплатный период использует данные запросов для улучшения модели (см. доки Zen). Куратор шлёт личные мысли/сны открытым текстом — решено: для личного использования ок, но держать в уме.
+- Free-модели Zen «на ограниченное время» — для того оставлен fallback на OpenRouter.
+- На прод (Railway) ничего не задеплоено — только локальные правки.
+
+---
+
+## Сессия: 2026-08-09 (деплой Zen на прод, CORS-чистка, два Railway-аккаунта)
+
+**Тема:** перенос Zen-провайдера из локалки на прод, убрана путаница с доменами, попытка смоук-теста (снова сеть).
+
+**Что сделано:**
+- **Выяснено про Railway**: curator-v3 живёт в аккаунте **mdnow** (e-mail `691553@bk.ru`, вход через GitHub), tiktok-watcher — в **Marina DNLCHK** (dnlchk.mn@gmail.com, вход через Google). В папке `curator-v3` CLI был привязан к tiktok-watcher (`railway status` показывал чужой проект, `railway project list` — только текущий аккаунт). Перепривязка: `railway link -p curator-v3` → production → сервис curator-v3.
+- **Деплой Zen на прод**: `railway variables --set "ZEN_API_KEY=..."` на проекте curator-v3 (production); `railway up --detach` → деплой `9e89ede5` **SUCCESS**, лог: `Application startup complete`, uvicorn на 8080.
+- **CORS-чистка**: из `backend/main.py` и `PURPOSE.md` убран устаревший домен `curator-v3-production-c830.up.railway.app`; остался актуальный `curator-v3-production.up.railway.app` (RAILWAY_PUBLIC_DOMAIN). Деплой `f2f88392` **SUCCESS**.
+- **Чистка доков от «50/день»**: `PURPOSE.md` (домен, провайдер Zen + OpenRouter fallback, лимит), `GOALS_SPEC.md` §8, `FUTURE_TASKS.md` (freellmpool — теперь запас на случай упора Zen+OpenRouter).
+- **Поиск дублей/ошибок**: дублей функций нет (91 `def`), дублей эндпоинтов нет (45 роутов, пути уникальны). `grep c830` по проекту — 0 совпадений.
+- Записан в память (mem0) факт про два Railway-аккаунта и их логины.
+
+**Проверено:**
+- Оба деплоя SUCCESS, прод-логи: сервис стартует без ошибок на новом коде.
+- `railway variable list` — ZEN_API_KEY на проде, все нужные переменные на месте (DATABASE_URL/Neon, OPENROUTER_API_KEY, CURATOR_SECRET, CURATOR_ENCRYPTION_KEY).
+- Домен: в проекте только `curator-v3-production.up.railway.app` (grep 0 совпадений на c830).
+
+**Открыто/в процессе:**
+- **`python test_feat.py` снова не прошёл** — та же причина: Neon рвёт соединение на данных (`ConnectionDoesNotExistError: connection was closed in the middle of operation` / WinError 1225). Диагностика: TCP до Neon (порт 5432) проходит (`TcpTestSucceeded=True`), но asyncpg 5/5 попыток `SELECT 1` → WinError 1225. Сеть/VPN пользователя нестабильна, это не код. Прогнать тест при стабильной сети.

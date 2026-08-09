@@ -1,8 +1,13 @@
 import httpx
 import json
-from backend.config import OPENROUTER_API_KEY, OPENROUTER_URL
+from backend.config import (
+    OPENROUTER_API_KEY,
+    OPENROUTER_URL,
+    ZEN_API_KEY,
+    ZEN_URL,
+)
 
-FREE_MODELS = [
+OPENROUTER_MODELS = [
     "nvidia/nemotron-3-super-120b-a12b:free",
     "google/gemma-4-26b-a4b-it:free",
     "nvidia/nemotron-3-ultra-550b-a55b:free",
@@ -11,7 +16,40 @@ FREE_MODELS = [
     "openai/gpt-oss-20b:free",
 ]
 
+ZEN_MODELS = [
+    "big-pickle",
+    "deepseek-v4-flash-free",
+    "nemotron-3-ultra-free",
+    "mimo-v2.5-free",
+    "longcat-2.0-free",
+    "laguna-s-2.1-free",
+    "ling-3.0-tiny-free",
+    "north-mini-code-free",
+]
+
 EMBED_MODEL = "nvidia/nemotron-3-embed-1b:free"
+
+PROVIDERS = []
+if ZEN_API_KEY:
+    PROVIDERS.append(
+        {
+            "name": "zen",
+            "url": ZEN_URL,
+            "key": ZEN_API_KEY,
+            "models": ZEN_MODELS,
+            "extra": {},
+        }
+    )
+if OPENROUTER_API_KEY:
+    PROVIDERS.append(
+        {
+            "name": "openrouter",
+            "url": OPENROUTER_URL,
+            "key": OPENROUTER_API_KEY,
+            "models": OPENROUTER_MODELS,
+            "extra": {"reasoning": {"exclude": True}},
+        }
+    )
 
 ANALYZE_NOTE_PROMPT = """Ты — интуитивный куратор мыслей. Проанализируй текст и верни JSON:
 {
@@ -165,25 +203,27 @@ def _parse_json_content(content: str | None) -> dict | None:
 
 async def _request_model(
     client: httpx.AsyncClient,
+    provider: dict,
     model: str,
     msgs: list[dict],
     temperature: float,
     max_tokens: int,
 ) -> str | None:
     try:
+        body = {
+            "model": model,
+            "messages": msgs,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        body.update(provider["extra"])
         r = await client.post(
-            OPENROUTER_URL,
+            provider["url"],
             headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Authorization": f"Bearer {provider['key']}",
                 "Content-Type": "application/json",
             },
-            json={
-                "model": model,
-                "messages": msgs,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                "reasoning": {"exclude": True},
-            },
+            json=body,
         )
         if r.status_code == 429:
             global AI_LAST_ERROR
@@ -217,7 +257,7 @@ async def call_ai(
     temperature: float = 0.7,
     max_tokens: int = 2000,
 ) -> str | None:
-    if not OPENROUTER_API_KEY:
+    if not PROVIDERS:
         return None
 
     msgs = []
@@ -225,41 +265,43 @@ async def call_ai(
         msgs.append({"role": "system", "content": system})
     msgs.append({"role": "user", "content": user_content})
 
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with httpx.AsyncClient(timeout=90) as client:
         for _ in range(2):
-            for model in FREE_MODELS:
-                content = await _request_model(
-                    client, model, msgs, temperature, max_tokens
-                )
-                if content:
-                    return content
+            for provider in PROVIDERS:
+                for model in provider["models"]:
+                    content = await _request_model(
+                        client, provider, model, msgs, temperature, max_tokens
+                    )
+                    if content:
+                        return content
     return None
 
 
 async def call_ai_json(
     user_content: str,
     temperature: float = 0.3,
-    max_tokens: int = 500,
+    max_tokens: int = 1000,
 ) -> dict | None:
-    if not OPENROUTER_API_KEY:
+    if not PROVIDERS:
         return None
 
     msgs = [{"role": "user", "content": user_content}]
 
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with httpx.AsyncClient(timeout=90) as client:
         for _ in range(2):
-            for model in FREE_MODELS:
-                content = await _request_model(
-                    client, model, msgs, temperature, max_tokens
-                )
-                data = _parse_json_content(content)
-                if data is not None:
-                    return data
+            for provider in PROVIDERS:
+                for model in provider["models"]:
+                    content = await _request_model(
+                        client, provider, model, msgs, temperature, max_tokens
+                    )
+                    data = _parse_json_content(content)
+                    if data is not None:
+                        return data
     return None
 
 
 async def analyze_note(text: str) -> dict:
-    if not OPENROUTER_API_KEY:
+    if not PROVIDERS:
         return {
             "summary": "",
             "category": "без категории",
@@ -269,12 +311,12 @@ async def analyze_note(text: str) -> dict:
         }
 
     data = await call_ai_json(
-        ANALYZE_NOTE_PROMPT + text, temperature=0.3, max_tokens=500
+        ANALYZE_NOTE_PROMPT + text, temperature=0.3, max_tokens=1000
     )
     if data is None:
         err = ""
         if AI_LAST_ERROR and "rate limit" in AI_LAST_ERROR.lower():
-            err = ": бесплатный лимит на сегодня исчерпан (50 запросов/день, сброс 00:00 UTC). Добавь $10 на openrouter.ai, чтобы получить 1000 запросов/день"
+            err = ": бесплатный лимит AI исчерпан на сегодня (сброс 00:00 UTC)"
         return {
             "summary": "",
             "category": "без категории",
@@ -294,7 +336,7 @@ async def analyze_note(text: str) -> dict:
 
 
 async def analyze_dream(text: str) -> dict:
-    if not OPENROUTER_API_KEY:
+    if not PROVIDERS:
         return {
             "symbols": [],
             "themes": [],
@@ -304,7 +346,7 @@ async def analyze_dream(text: str) -> dict:
         }
 
     data = await call_ai_json(
-        ANALYZE_DREAM_PROMPT + text, temperature=0.5, max_tokens=500
+        ANALYZE_DREAM_PROMPT + text, temperature=0.5, max_tokens=1000
     )
     if data is None:
         return {
@@ -328,7 +370,7 @@ async def analyze_dream(text: str) -> dict:
 async def dream_insight(
     night_text: str, morning_text: str, quality: int | None, context: str
 ) -> str:
-    if not OPENROUTER_API_KEY:
+    if not PROVIDERS:
         return "AI временно недоступен."
 
     prompt = DREAM_INSIGHT_PROMPT.format(
@@ -337,12 +379,12 @@ async def dream_insight(
         quality=quality or "?",
         context=context or "(нет данных)",
     )
-    result = await call_ai(prompt, temperature=0.6, max_tokens=300)
+    result = await call_ai(prompt, temperature=0.6, max_tokens=800)
     return result or "Не удалось сформировать инсайт."
 
 
 async def daily_patterns(notes_text: str, dreams_text: str) -> dict:
-    if not OPENROUTER_API_KEY:
+    if not PROVIDERS:
         return {
             "recurring_themes": [],
             "emotional_arc": "",
@@ -351,7 +393,7 @@ async def daily_patterns(notes_text: str, dreams_text: str) -> dict:
         }
 
     prompt = DAILY_PATTERNS_PROMPT.format(notes=notes_text, dreams=dreams_text)
-    data = await call_ai_json(prompt, temperature=0.4, max_tokens=500)
+    data = await call_ai_json(prompt, temperature=0.4, max_tokens=1000)
     if data is None:
         return {
             "recurring_themes": [],
@@ -369,11 +411,11 @@ async def daily_patterns(notes_text: str, dreams_text: str) -> dict:
 
 
 async def thread_suggest(content: str, threads: str) -> dict:
-    if not OPENROUTER_API_KEY:
+    if not PROVIDERS:
         return {"thread_id": None, "thread_name": "", "confidence": 0.0}
 
     prompt = THREAD_SUGGEST_PROMPT.format(content=content, threads=threads)
-    data = await call_ai_json(prompt, temperature=0.2, max_tokens=200)
+    data = await call_ai_json(prompt, temperature=0.2, max_tokens=1000)
     if data is None:
         return {"thread_id": None, "thread_name": "", "confidence": 0.0}
 
@@ -386,15 +428,15 @@ async def thread_suggest(content: str, threads: str) -> dict:
 
 async def generate_goals(notes_text: str) -> dict:
     """Возвращает {"goals": [...]} или {"error": str} при сбое."""
-    if not OPENROUTER_API_KEY:
+    if not PROVIDERS:
         return {"error": "API ключ не настроен."}
 
     prompt = GOALS_PROMPT.format(notes=notes_text or "(нет заметок)")
-    data = await call_ai_json(prompt, temperature=0.3, max_tokens=1200)
+    data = await call_ai_json(prompt, temperature=0.3, max_tokens=2000)
     if data is None:
         err = ""
         if AI_LAST_ERROR and "rate limit" in AI_LAST_ERROR.lower():
-            err = ": бесплатный лимит на сегодня исчерпан (50 запросов/день, сброс 00:00 UTC)"
+            err = ": бесплатный лимит AI исчерпан на сегодня (сброс 00:00 UTC)"
         return {"error": "AI недоступен" + err}
 
     goals = data.get("goals")
@@ -443,15 +485,15 @@ async def generate_goals(notes_text: str) -> dict:
 
 async def day_essence(notes_text: str) -> dict:
     """Возвращает {"essence": str} или {"error": str} при сбое."""
-    if not OPENROUTER_API_KEY:
+    if not PROVIDERS:
         return {"error": "API ключ не настроен."}
 
     prompt = DAY_ESSENCE_PROMPT.format(notes=notes_text or "(нет заметок)")
-    data = await call_ai_json(prompt, temperature=0.4, max_tokens=300)
+    data = await call_ai_json(prompt, temperature=0.4, max_tokens=800)
     if data is None:
         err = ""
         if AI_LAST_ERROR and "rate limit" in AI_LAST_ERROR.lower():
-            err = ": бесплатный лимит на сегодня исчерпан (50 запросов/день, сброс 00:00 UTC)"
+            err = ": бесплатный лимит AI исчерпан на сегодня (сброс 00:00 UTC)"
         return {"error": "AI недоступен" + err}
 
     essence = str(data.get("essence", "")).strip()
@@ -477,7 +519,7 @@ CHAT_SYSTEM = """Ты — Куратор, AI-ассистент внутри п�
 
 
 async def chat_with_context(messages: list[dict], system: str = "") -> str:
-    if not OPENROUTER_API_KEY:
+    if not PROVIDERS:
         return "API ключ не настроен."
 
     msgs = []
@@ -485,17 +527,23 @@ async def chat_with_context(messages: list[dict], system: str = "") -> str:
         msgs.append({"role": "system", "content": system})
     msgs.extend(messages)
 
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=90) as client:
         for _ in range(2):
-            for model in FREE_MODELS:
-                content = await _request_model(
-                    client, model, msgs, temperature=0.7, max_tokens=2000
-                )
-                if content:
-                    return content
+            for provider in PROVIDERS:
+                for model in provider["models"]:
+                    content = await _request_model(
+                        client,
+                        provider,
+                        model,
+                        msgs,
+                        temperature=0.7,
+                        max_tokens=2000,
+                    )
+                    if content:
+                        return content
 
     if AI_LAST_ERROR and "rate limit" in AI_LAST_ERROR.lower():
-        return "Бесплатный лимит OpenRouter на сегодня исчерпан (50 запросов/день, сброс в 00:00 UTC). Добавь $10 на openrouter.ai, чтобы получить 1000 запросов в день."
+        return "Бесплатный лимит AI на сегодня исчерпан (сброс в 00:00 UTC)."
     return "AI временно недоступен. Попробуй через минуту."
 
 

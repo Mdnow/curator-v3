@@ -2,7 +2,7 @@
 
 Период: июль — август 2026. Автор: AI-ассистент (opencode).
 Стек: FastAPI + PostgreSQL (Neon) + vanilla JS. Деплой: Railway.
-AI-провайдер: OpenRouter, free-модели.
+AI-провайдер: OpenCode Zen (бесплатные free-модели) как основной + OpenRouter free-модели как fallback (был основным до 08.08).
 Короткий лог по сессиям — в `SESSION_JOURNAL.md`.
 
 ---
@@ -461,6 +461,160 @@ pattern = f"%{escaped}%"
 - Ключевые фразы берутся из `ai_keyphrases` (lowercase) — «свобода»/«Свобода» считаются одним токеном.
 - Категории «Другое» и «без категории» не попадают в пузыри (шум), но заметки дня видны в «Заметках».
 - Следующий уровень (по запросу пользователя): **«Путь целей»** — траектория из проявленных целей по времени + связи через общие темы. Решение: сначала бесплатная цепочка из готовых целей, AI-этапы — потом.
+
+---
+
+## 14. Сессия 07.08.2026 — интеграция с tiktok-watcher: `/api/notes/import`
+
+Внешний вход в зеркало: tiktok-watcher («Зеркало дня») импортирует разобранное TikTok-видео как готовую заметку с AI-полями.
+
+### 14.1. Проблема
+
+Обычный `POST /api/notes` запускает `_analyze_in_background` → 1 запрос OpenRouter (лимит 50/день). Для импортированных заметок анализ уже сделан на стороне tiktok-watcher (Groq) — повторный анализ жег бы лимит и перезаписывал бы готовую разметку (или оставлял «без категории» при 429).
+
+### 14.2. Решение
+
+`backend/routes/notes.py` → `POST /api/notes/import`, модель `ImportNoteReq` (расширение `NoteReq`: `ai_summary`, `ai_category`, `ai_sentiment`, `ai_keyphrases`):
+
+- INSERT с готовой AI-разметкой, **без** `_analyze_in_background`;
+- единственный фоновый шаг — `embed_text()` для related-поиска (`/api/notes/related`) — это **1 free-запрос OpenRouter на импортированную заметку** (embed-модель `nvidia/nemotron-3-embed-1b:free`, считается в суточный лимит 50/день — учитывать);
+- валидация через `_check_len` (п.11.5).
+
+### 14.3. Грабли (важно)
+
+- **Пуш в GitHub не деплоит на Railway** (повтор §3.1): коммит `59399a7` в `main` не доехал до прода. Прод-куратор эндпоинта не имеет → tiktok-watcher с 07.08 работает через fallback на `POST /api/notes`.
+- Диагностика «что реально на проде»: `curl <domain>/openapi.json` и смотреть `paths` (наш путь `/api/notes/import` отсутствовал).
+- План: ручной деплой куратора (`railway up --detach`), после чего убрать fallback в `curator_push.py` tiktok-watcher.
+
+### 14.4. Проверено
+
+- `/api/login` (`mdnow` + пароль) → 200, токен; токен проходит Bearer-проверку.
+- Логика fallback в tiktok-watcher: 404/405 на `/import` → обычный `POST /api/notes` → заметка создаётся.
+
+---
+
+## 15. Сессия 08.08.2026 — AI-провайдер → OpenCode Zen (бесплатные free-модели)
+
+Замена OpenRouter на OpenCode Zen как основного провайдера. Причина: у OpenRouter лимит 50 запросов/день на free-ключ → постоянные 429; у Zen есть бесплатные модели без этого ограничения.
+
+### 15.1. Открытие: big-pickle — это Zen-модель
+
+Модель `opencode/big-pickle`, которой пользователь пользуется в opencode, — это **бесплатная модель OpenCode Zen**. В доке `/docs/zen` их 8 (все Free):
+
+| Модель Zen | Model ID (в API) |
+|---|---|
+| Big Pickle | `big-pickle` |
+| DeepSeek V4 Flash Free | `deepseek-v4-flash-free` |
+| MiMo-V2.5 Free | `mimo-v2.5-free` |
+| Nemotron 3 Ultra Free | `nemotron-3-ultra-free` |
+| Laguna S 2.1 Free | `laguna-s-2.1-free` |
+| Ling-3.0-tiny Free | `ling-3.0-tiny-free` |
+| LongCat-2.0 Free | `longcat-2.0-free` |
+| North Mini Code Free | `north-mini-code-free` |
+
+Эндпоинт OpenAI-совместимый: `https://opencode.ai/zen/v1/chat/completions` (`@ai-sdk/openai-compatible`). В конфиге opencode id имеет вид `opencode/<model-id>`, но в сыром API `model` = просто `<model-id>`. Ключ — OpenCode Zen API key (opencode.ai/auth).
+
+### 15.2. Архитектура: провайдер-слой в ai.py
+
+Раньше `call_ai`/`call_ai_json` были захардкожены на OpenRouter (URL+ключ+модели из `FREE_MODELS`). Теперь:
+
+- `PROVIDERS` — список словарей `{name, url, key, models, extra}`. **Zen первым**, OpenRouter fallback. `extra` — доп. поля тела запроса (для OpenRouter `reasoning: {exclude: true}`).
+- `_request_model(client, provider, model, ...)` — единый вызов с обработкой 429/ошибок/пустого контента, строит тело из `provider["extra"]`.
+- `call_ai`/`call_ai_json`/`chat_with_context` — 2 прохода по провайдерам, внутри по моделям; возврат первого успеха.
+- Guard `if not PROVIDERS:` заменил `if not OPENROUTER_API_KEY:` во всех анализаторах.
+- `embed_text()` остался на OpenRouter (`nvidia/nemotron-3-embed-1b:free`) — у Zen бесплатных эмбеддингов нет.
+
+`backend/config.py`: `ZEN_API_KEY` (из `.env`), `ZEN_URL`.
+
+### 15.3. Грабли с Zen-моделями (важно)
+
+1. **`big-pickle` и `deepseek-v4-flash-free` — reasoning-модели**: ответ приходит с `reasoning_content` (размышления на английском) + `content` (финальный JSON). Мы читаем только `content` — ок.
+2. **`max_tokens` считается ВМЕСТЕ с reasoning-токенами**. big-pickle на простой JSON съела 471 из 500 токенов (311 reasoning у deepseek). Старые лимиты (`thread_suggest` 200, `day_essence` 300) обрезали бы ответ до пустоты → подняты (см. 15.4).
+3. **Латентность**: простой JSON-запрос ~11с (против ~3с у старых free). Таймаут httpx поднят 15с→90с, иначе каскад 2×8 попыток × 15с сжигал весь бюджет.
+4. **Приватность**: у free-моделей Zen (big-pickle в т.ч.) «данные могут использоваться для улучшения модели». Куратор шлёт личные мысли/сны открытым текстом — это осознанное решение пользователя для личного использования.
+5. **Free-модели Zen «на ограниченное время»** — могут исчезнуть. Для этого и оставлен fallback на OpenRouter.
+6. **Rate-limit в сообщениях** нейтрализован: больше не пишем «лимит OpenRouter 50/день».
+
+### 15.4. Поднятые лимиты
+
+| Вызов | Было | Стало |
+|---|---|---|
+| `call_ai_json` (default) | 500 | 1000 |
+| `analyze_note` / `analyze_dream` | 500 | 1000 |
+| `dream_insight` | 300 | 800 |
+| `daily_patterns` | 500 | 1000 |
+| `thread_suggest` | 200 | 1000 |
+| `generate_goals` | 1200 | 2000 |
+| `day_essence` | 300 | 800 |
+| таймауты `call_ai`/`call_ai_json`/`chat_with_context` | 15/15/60 | 90/90/90 |
+
+### 15.5. Проверено
+
+- Прямой curl к Zen: 200, `big-pickle` и `deepseek-v4-flash-free` отдают чистый русский JSON.
+- `call_ai_json` через рефакторинг: `providers=['zen','openrouter']`, результат — корректный dict.
+- `py_compile` config.py / ai.py / notes.py — OK.
+- Полный смоук через uvicorn **не прошёл**: Neon рвёт соединение (`ConnectionDoesNotExistError: connection was closed in the middle of operation`, ~26с) из-за нестабильной сети/VPN пользователя — не связано с правкой. Повторить `python test_feat.py` при стабильной сети.
+
+### 15.6. Замечания
+
+- В ротации Zen 8 моделей (все Free, доки): порядок — проверенные основные первыми (big-pickle, deepseek, nemotron, mimo), затем запасные.
+- Ключ записан только в локальный `.env` (gitignore). Для прода на Railway — добавить `ZEN_API_KEY` в переменные окружения при деплое.
+- `north-mini-code-free` — код-ориентированная; если не будет выдавать JSON по-русски, из ротации можно убрать.
+
+---
+
+## 16. Сессия 09.08.2026 — Деплой Zen на прод, CORS-чистка, два Railway-аккаунта
+
+### 16.1. Два Railway-аккаунта (грабли с привязкой)
+
+Проекты живут в **разных аккаунтах** Railway:
+
+| Проект | Аккаунт | Логин | Прод-домен |
+|---|---|---|---|
+| curator-v3 | mdnow (`691553@bk.ru`) | через GitHub | `curator-v3-production.up.railway.app` |
+| tiktok-watcher | Marina DNLCHK (`dnlchk.mn@gmail.com`) | через Google | `tiktok-watcher-production.up.railway.app` |
+
+**Грабли.** В папке `C:\dev\opencode\ежедневник\curator-v3` Railway CLI был привязан к **tiktok-watcher** (`railway status` показывал чужой проект; `railway project list` видит только проекты залогиненного аккаунта). Это привело к фальстарту: `railway status` → `Unauthorized`, т.к. привязка указывала на проект, которого нет в залогиненном аккаунте.
+
+**Решение.** `railway login` под аккаунт mdnow (браузер, GitHub) → `railway link -p curator-v3` → выбрать production → авто-выбор сервиса curator-v3.
+
+### 16.2. ZEN_API_KEY на проде + деплой
+
+- `railway variables --set "ZEN_API_KEY=..."` (проект curator-v3, production). Проверено `railway variable list` — ключ на месте, вместе с DATABASE_URL (Neon), OPENROUTER_API_KEY, CURATOR_SECRET, CURATOR_ENCRYPTION_KEY.
+- `railway up --detach` → деплой `9e89ede5` **SUCCESS**. Логи: `Application startup complete`, uvicorn на 8080.
+
+### 16.3. CORS: два домена → один (грабли)
+
+В CORS (`backend/main.py`) был захардкожен **устаревший** домен `curator-v3-production-c830.up.railway.app`. Актуальный (RAILWAY_PUBLIC_DOMAIN) — `curator-v3-production.up.railway.app`.
+
+**Грабли.** Домен Railway-сервиса может измениться (в т.ч. при пересоздании/переименовании сервиса). CORS захардкожен в коде → при смене домена фронт перестаёт ходить, а диагноз выглядит как «сервер не отвечает».
+
+**Решение.** Убран `-c830` из `main.py` и `PURPOSE.md`, оставлен только актуальный домен. Деплой `f2f88392` **SUCCESS**. `grep c830` по проекту — 0 совпадений.
+
+### 16.4. Чистка устаревшего «лимита 50/день» из рабочих доков
+
+Журналы не трогали (история), обновлены только актуальные доки:
+
+- `PURPOSE.md` — прод-URL, AI-провайдер (Zen + OpenRouter fallback), строка про лимит.
+- `GOALS_SPEC.md` §8 — «лимит OpenRouter 50/день» → «free-лимит AI (Zen + OpenRouter fallback)».
+- `FUTURE_TASKS.md` — freellmpool: «запас на случай упора в 50 free-запросов/день» → «если Zen и OpenRouter вместе упрутся в лимиты».
+
+### 16.5. Поиск дублей и ошибок
+
+- Дублей функций нет: 91 `def` в backend, имена уникальны в рамках модулей.
+- Дублей эндпоинтов нет: 45 роутов, пути+методы уникальны.
+- Лимиты в сообщениях уже нейтрализованы (п. 15.3.6).
+
+### 16.6. Смоук-тест снова не прошёл (сеть, не код)
+
+`python test_feat.py` → сервер не поднялся: uvicorn упал на `init_db()` → `asyncpg.exceptions.ConnectionDoesNotExistError: connection was closed in the middle of operation`.
+
+Диагностика сети:
+- `Test-NetConnection ep-icy-bar-awtsvln8...neon.tech:5432` → `TcpTestSucceeded=True` (TCP проходит).
+- asyncpg-проба (5 попыток `SELECT 1`) → 5/5 `WinError 1225` («удалённый компьютер принудительно закрыл соединение»).
+- Вывод: TCP устанавливается, но рвётся на передаче данных — нестабильный VPN/сеть пользователя. То же самое, что в §15.5 (08.08).
+
+**Повторить `python test_feat.py` при стабильной сети.**
 
 ---
 

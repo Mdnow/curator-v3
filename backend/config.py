@@ -19,6 +19,9 @@ JWT_EXPIRE_HOURS = 720
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
+ZEN_API_KEY = os.getenv("ZEN_API_KEY", "")
+ZEN_URL = "https://opencode.ai/zen/v1/chat/completions"
+
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 ENCRYPTION_KEY = os.getenv("CURATOR_ENCRYPTION_KEY") or secrets.token_hex(32)

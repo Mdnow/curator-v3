@@ -200,7 +200,7 @@ async def import_note(
     req: ImportNoteReq, bg: BackgroundTasks, user_id: int = Depends(get_current_user)
 ):
     """Импорт готовой заметки с AI-полями. Без повторного AI-анализа и thread_suggest —
-    чтобы не тратить лимит OpenRouter. Делает только embedding для поиска похожих."""
+    чтобы не тратить лимит бесплатного AI. Делает только embedding для поиска похожих."""
     from backend.ai import embed_text
 
     async with get_db() as db:
