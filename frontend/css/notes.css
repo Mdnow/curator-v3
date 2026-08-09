@@ -74,6 +74,9 @@
 }
 .note-ai-category { font-size: var(--font-xs); font-weight: 500; color: var(--accent); letter-spacing: 0.05em; }
 .note-ai-summary { font-size: var(--font-xs); color: var(--text-2); line-height: 1.5; }
+.note-ai-theses { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; }
+.note-ai-thesis { font-size: var(--font-xs); color: var(--text-2); line-height: 1.5; padding-left: 10px; position: relative; }
+.note-ai-thesis::before { content: '—'; position: absolute; left: 0; color: var(--accent); }
 .note-ai-sentiment {
   font-size: var(--font-xs); color: var(--text-3);
 }

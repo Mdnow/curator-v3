@@ -33,11 +33,12 @@ async def _analyze_in_background(note_id: int, content: str, user_id: int):
 
         if ai.get("error") is None and (ai.get("summary") or ai.get("category")):
             await db.execute(
-                "UPDATE notes SET ai_summary=$1, ai_category=$2, ai_sentiment=$3, ai_keyphrases=$4 WHERE id=$5",
+                "UPDATE notes SET ai_summary=$1, ai_category=$2, ai_sentiment=$3, ai_keyphrases=$4, ai_theses=$5 WHERE id=$6",
                 ai.get("summary", ""),
                 ai.get("category", ""),
                 ai.get("sentiment", 0.0),
                 json.dumps(ai.get("keyphrases", [])),
+                json.dumps(ai.get("theses", [])),
                 note_id,
             )
 
@@ -93,7 +94,7 @@ async def get_notes(
         offset = (page - 1) * limit
         rows = await db.fetch(
             """SELECT id, content_encrypted, note_date, tags, is_favorited,
-                      ai_summary, ai_category, ai_sentiment, ai_keyphrases,
+                      ai_summary, ai_category, ai_sentiment, ai_keyphrases, ai_theses,
                       thread_id, mood, created_at, updated_at
                FROM notes WHERE user_id=$1 AND note_date=$2
                ORDER BY created_at DESC LIMIT $3 OFFSET $4""",
@@ -120,6 +121,12 @@ async def get_notes(
                     keyphrases = json.loads(r["ai_keyphrases"])
                 except Exception:
                     pass
+            theses = []
+            if r["ai_theses"]:
+                try:
+                    theses = json.loads(r["ai_theses"])
+                except Exception:
+                    pass
             notes.append(
                 {
                     "id": r["id"],
@@ -133,6 +140,7 @@ async def get_notes(
                     if r["ai_sentiment"]
                     else 0.0,
                     "ai_keyphrases": keyphrases,
+                    "ai_theses": theses,
                     "thread_id": r["thread_id"] or "",
                     "mood": r["mood"] or "",
                     "created_at": str(r["created_at"]) if r["created_at"] else "",
@@ -186,11 +194,12 @@ async def _reanalyze_in_background(note_ids: list[int], user_id: int):
             ai = await analyze_note(content)
             if ai.get("error") is None and (ai.get("summary") or ai.get("category")):
                 await db.execute(
-                    "UPDATE notes SET ai_summary=$1, ai_category=$2, ai_sentiment=$3, ai_keyphrases=$4 WHERE id=$5",
+                    "UPDATE notes SET ai_summary=$1, ai_category=$2, ai_sentiment=$3, ai_keyphrases=$4, ai_theses=$5 WHERE id=$6",
                     ai.get("summary", ""),
                     ai.get("category", ""),
                     ai.get("sentiment", 0.0),
                     json.dumps(ai.get("keyphrases", [])),
+                    json.dumps(ai.get("theses", [])),
                     note_id,
                 )
 
@@ -207,10 +216,11 @@ async def import_note(
         enc = encrypt(req.content)
         tags_json = json.dumps(req.tags or [])
         keyphrases_json = json.dumps(req.ai_keyphrases or [])
+        theses_json = json.dumps(req.ai_theses or [])
         row = await db.fetchrow(
             """INSERT INTO notes (user_id, content_encrypted, note_date, tags, mood,
-                                 ai_summary, ai_category, ai_sentiment, ai_keyphrases)
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id""",
+                                 ai_summary, ai_category, ai_sentiment, ai_keyphrases, ai_theses)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id""",
             user_id,
             enc,
             req.note_date,
@@ -220,6 +230,7 @@ async def import_note(
             req.ai_category or "",
             req.ai_sentiment,
             keyphrases_json,
+            theses_json,
         )
         note_id = row["id"]
 

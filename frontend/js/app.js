@@ -182,12 +182,16 @@ async function loadNotes() {
         const t = new Date(note.created_at);
         const time = String(t.getHours()).padStart(2,'0') + ':' + String(t.getMinutes()).padStart(2,'0');
         let aiHtml = '';
-        if (note.ai_summary || note.ai_category) {
+        if (note.ai_summary || note.ai_category || (note.ai_theses && note.ai_theses.length)) {
           const sent = note.ai_sentiment;
           const sentLabel = sent > 0.3 ? 'светлое' : sent < -0.3 ? 'тёмное' : '';
+          const thesesHtml = (note.ai_theses && note.ai_theses.length)
+            ? `<div class="note-ai-theses">${note.ai_theses.map(t => `<div class="note-ai-thesis">${esc(t)}</div>`).join('')}</div>`
+            : '';
           aiHtml = `<div class="note-ai">
             ${note.ai_category ? `<span class="note-ai-category">${esc(note.ai_category)}</span>` : ''}
             ${note.ai_summary ? `<span class="note-ai-summary">${esc(note.ai_summary)}</span>` : ''}
+            ${thesesHtml}
             ${sentLabel ? `<span class="note-ai-sentiment">${sentLabel}</span>` : ''}
           </div>`;
         }

@@ -54,6 +54,7 @@ if OPENROUTER_API_KEY:
 ANALYZE_NOTE_PROMPT = """Ты — интуитивный куратор мыслей. Проанализируй текст и верни JSON:
 {
   "summary": "одно предложение — суть заметки",
+  "theses": ["2-4 чётких тезиса — конкретные мысли, которые несёт текст"],
   "category": "одно слово — тема (Мысли/Задачи/Идеи/Наблюдения/Вопросы/Планы/Цитаты/Отношения/Саморазвитие)",
   "sentiment": число от -1.0 (тёмное/тревожное) до 1.0 (светлое/спокойное),
   "keyphrases": ["до 3 ключевых фраз из текста"],
@@ -304,6 +305,7 @@ async def analyze_note(text: str) -> dict:
     if not PROVIDERS:
         return {
             "summary": "",
+            "theses": [],
             "category": "без категории",
             "sentiment": 0.0,
             "keyphrases": [],
@@ -319,6 +321,7 @@ async def analyze_note(text: str) -> dict:
             err = ": бесплатный лимит AI исчерпан на сегодня (сброс 00:00 UTC)"
         return {
             "summary": "",
+            "theses": [],
             "category": "без категории",
             "sentiment": 0.0,
             "keyphrases": [],
@@ -328,6 +331,9 @@ async def analyze_note(text: str) -> dict:
 
     return {
         "summary": data.get("summary", ""),
+        "theses": data.get("theses", [])
+        if isinstance(data.get("theses"), list)
+        else [],
         "category": data.get("category", "без категории"),
         "sentiment": float(data.get("sentiment", 0.0) or 0.0),
         "keyphrases": data.get("keyphrases", []),

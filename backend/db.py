@@ -45,6 +45,7 @@ async def init_db():
                 ai_category TEXT,
                 ai_sentiment REAL,
                 ai_keyphrases TEXT DEFAULT '[]',
+                ai_theses TEXT DEFAULT '[]',
                 thread_id TEXT,
                 mood TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -115,6 +116,7 @@ async def init_db():
         for col, typ, default in [
             ("ai_sentiment", "REAL", "0.0"),
             ("ai_keyphrases", "TEXT", "'[]'"),
+            ("ai_theses", "TEXT", "'[]'"),
             ("thread_id", "TEXT", "NULL"),
             ("mood", "TEXT", "''"),
         ]:

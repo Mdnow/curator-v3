@@ -49,6 +49,7 @@ class ImportNoteReq(BaseModel):
     ai_category: str = ""
     ai_sentiment: float = 0.0
     ai_keyphrases: list[str] = []
+    ai_theses: list[str] = []
 
     @field_validator("content")
     @classmethod
