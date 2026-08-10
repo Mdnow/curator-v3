@@ -53,20 +53,29 @@ async def _generate_in_background(user_id: int):
             date_map[r["id"]] = r["note_date"]
 
     notes_text = "\n\n".join(note_parts) if note_parts else ""
-    result = await generate_goals(notes_text)
+    async with pool.acquire() as db:
+        existing = await db.fetch(
+            "SELECT id, title, description, evidence FROM goals WHERE user_id=$1",
+            user_id,
+        )
+    existing_list = [
+        {"id": r["id"], "title": r["title"], "description": r["description"] or ""}
+        for r in existing
+    ]
+    result = await generate_goals(notes_text, existing_goals=existing_list)
     if "error" in result:
         print(f"[goals] generate FAIL: {result['error']}", flush=True)
         return
 
-    new_goals = result["goals"]
-    async with pool.acquire() as db:
-        existing = await db.fetch("SELECT title FROM goals WHERE user_id=$1", user_id)
-        existing_titles = {g["title"].strip().lower() for g in existing}
+    by_id = {r["id"]: r for r in existing}
+    by_title = {}
+    for r in existing:
+        by_title.setdefault(r["title"].strip().lower(), r["id"])
 
+    async with pool.acquire() as db:
+        merged = 0
         added = 0
-        for g in new_goals:
-            if g["title"].strip().lower() in existing_titles:
-                continue
+        for g in result["goals"]:
             evidence = []
             for e in g["evidence"]:
                 nid = e.get("note_id")
@@ -79,6 +88,19 @@ async def _generate_in_background(user_id: int):
                         "quote": e.get("quote", ""),
                     }
                 )
+
+            # слияние с существующей целью вместо вставки дубля
+            target_id = None
+            eid = g.get("existing_goal_id")
+            if eid is not None and eid in by_id:
+                target_id = eid
+            elif g["title"].strip().lower() in by_title:
+                target_id = by_title[g["title"].strip().lower()]
+
+            if target_id is not None:
+                await _merge_into_goal(db, target_id, evidence)
+                merged += 1
+                continue
             await db.execute(
                 """INSERT INTO goals
                    (user_id, title, description, evidence, thread_ids, categories, source_count)
@@ -91,9 +113,41 @@ async def _generate_in_background(user_id: int):
                 json.dumps(g["categories"], ensure_ascii=False),
                 len(evidence),
             )
-            existing_titles.add(g["title"].strip().lower())
             added += 1
-        print(f"[goals] added {added} new, total existing {len(existing)}", flush=True)
+        print(
+            f"[goals] merged {merged}, added {added}, total existing {len(existing)}",
+            flush=True,
+        )
+
+
+async def _merge_into_goal(db, goal_id: int, new_entries: list[dict]) -> None:
+    """Дополняет evidence существующей цели уникальными цитатами."""
+    row = await db.fetchrow("SELECT evidence FROM goals WHERE id=$1", goal_id)
+    if row is None:
+        return
+    cur = []
+    if row["evidence"]:
+        try:
+            cur = json.loads(row["evidence"])
+        except (ValueError, TypeError):
+            cur = []
+    seen = set()
+    merged = []
+    for e in list(cur) + new_entries:
+        key = (e.get("note_id"), e.get("quote", ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(e)
+    if len(merged) > len(cur):
+        await db.execute(
+            """UPDATE goals
+               SET evidence=$1, source_count=$2, updated_at=CURRENT_TIMESTAMP
+               WHERE id=$3""",
+            json.dumps(merged, ensure_ascii=False),
+            len(merged),
+            goal_id,
+        )
 
 
 @router.get("")

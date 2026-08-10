@@ -146,6 +146,11 @@ GOALS_PROMPT = """Ты — когнитивное зеркало. Проанал
 
 Цель — НЕ задача и НЕ мечта. Цель = паттерн, подтверждённый цитатами.
 
+ГЛАВНОЕ — ОДНА ТЕМА = ОДНА ЦЕЛЬ, НЕ ДУБЛИРУЙ:
+- Если фразы из разных заметок описывают одну и ту же тему разными словами («написать книгу», «работа над книгой», «главы про свободу») — это ОДНА цель. Собери все цитаты в её evidence, не дроби.
+- Называй цель устойчивой именной формой (тема, а не случайный глагол из заметки): «Книга», а не «написать книгу» / «работа над книгой». Так цель остаётся узнаваемой при перегенерации.
+- Сверься со списком СУЩЕСТВУЮЩИХ ЦЕЛЕЙ ниже. Если паттерн уже покрыт существующей целью (смысл совпадает, даже если слова другие) — НЕ создавай новую запись: укажи её id в "existing_goal_id" и добавь новые цитаты в evidence этой цели.
+
 ВЕРНИ JSON:
 {{
   "goals": [
@@ -154,7 +159,8 @@ GOALS_PROMPT = """Ты — когнитивное зеркало. Проанал
       "description": "одно предложение — куда ведёт вектор",
       "evidence": [{{"quote": "точная цитата из заметки", "note_id": 123}}],
       "thread_ids": ["uuid"],
-      "categories": ["Саморазвитие"]
+      "categories": ["Саморазвитие"],
+      "existing_goal_id": null
     }}
   ]
 }}
@@ -165,6 +171,10 @@ GOALS_PROMPT = """Ты — когнитивное зеркало. Проанал
 - Не выдумывай цели, которых нет в данных.
 - 2-5 целей, не больше. Лаконично.
 - note_id бери ТОЛЬКО из предоставленного списка.
+- existing_goal_id: id цели из СУЩЕСТВУЮЩИХ ЦЕЛЕЙ, если этот паттерн уже в ней (иначе null). Не выдумывай id.
+
+СУЩЕСТВУЮЩИЕ ЦЕЛИ (JSON):
+{existing}
 
 ЗАМЕТКИ:
 {notes}
@@ -432,12 +442,24 @@ async def thread_suggest(content: str, threads: str) -> dict:
     }
 
 
-async def generate_goals(notes_text: str) -> dict:
-    """Возвращает {"goals": [...]} или {"error": str} при сбое."""
+async def generate_goals(
+    notes_text: str, existing_goals: list[dict] | None = None
+) -> dict:
+    """Возвращает {"goals": [...]} или {"error": str} при сбое.
+
+    existing_goals — список целей, уже лежащих в зеркале
+    ([{"id": int, "title": str, "description": str}]): передаются в промпт,
+    чтобы AI не плодил дубликаты и помечал их полем existing_goal_id.
+    """
     if not PROVIDERS:
         return {"error": "API ключ не настроен."}
 
-    prompt = GOALS_PROMPT.format(notes=notes_text or "(нет заметок)")
+    existing_goals = [g for g in (existing_goals or []) if isinstance(g, dict)]
+    existing_json = json.dumps(existing_goals, ensure_ascii=False)[:4000] or "[]"
+    known_ids = {g["id"] for g in existing_goals if isinstance(g.get("id"), int)}
+    prompt = GOALS_PROMPT.replace("{existing}", existing_json).replace(
+        "{notes}", notes_text or "(нет заметок)"
+    )
     data = await call_ai_json(prompt, temperature=0.3, max_tokens=2000)
     if data is None:
         err = ""
@@ -471,6 +493,10 @@ async def generate_goals(notes_text: str) -> dict:
         # цитаты должны быть из разных заметок — иначе нет «проявленного вектора»
         if len({q["note_id"] for q in quotes}) < 2:
             continue
+        eid = g.get("existing_goal_id")
+        if isinstance(eid, str) and eid.isdigit():
+            eid = int(eid)
+        existing_goal_id = eid if isinstance(eid, int) and eid in known_ids else None
         clean.append(
             {
                 "title": title[:80],
@@ -482,6 +508,7 @@ async def generate_goals(notes_text: str) -> dict:
                 "categories": g.get("categories")
                 if isinstance(g.get("categories"), list)
                 else [],
+                "existing_goal_id": existing_goal_id,
             }
         )
     if not clean:
