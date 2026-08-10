@@ -497,7 +497,9 @@ async def generate_goals(
         if len({q["note_id"] for q in quotes}) < 2:
             continue
         eid = g.get("existing_goal_id")
-        if isinstance(eid, str) and eid.isdigit():
+        if isinstance(eid, bool):
+            eid = None
+        elif isinstance(eid, str) and eid.isdigit():
             eid = int(eid)
         existing_goal_id = eid if isinstance(eid, int) and eid in known_ids else None
         clean.append(

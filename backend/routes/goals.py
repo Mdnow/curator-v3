@@ -85,7 +85,7 @@ async def _generate_in_background(user_id: int):
     by_id = {r["id"]: r for r in existing}
     chosen_ids = set()
 
-    async with pool.acquire() as db:
+    async with pool.acquire() as db, db.transaction():
         added = 0
         for g in result["goals"]:
             evidence = []
@@ -93,6 +93,8 @@ async def _generate_in_background(user_id: int):
                 nid = e.get("note_id")
                 if isinstance(nid, str) and nid.isdigit():
                     nid = int(nid)
+                if nid is None or nid not in date_map:
+                    continue  # галлюцинированный note_id — не подтверждение
                 evidence.append(
                     {
                         "note_id": nid,
@@ -100,17 +102,23 @@ async def _generate_in_background(user_id: int):
                         "quote": e.get("quote", ""),
                     }
                 )
+            if len({q["note_id"] for q in evidence}) < 2:
+                continue  # нет двух реальных подтверждений — мимо
 
             # существующая цель (активная или архивная) возвращается в фокус
             eid = g.get("existing_goal_id")
+            if isinstance(eid, bool):
+                eid = None
             if eid is not None and eid in by_id:
+                if eid in chosen_ids:
+                    continue  # дубликат в ответе AI — не затирать первый
                 chosen_ids.add(eid)
                 await db.execute(
                     """UPDATE goals
                        SET title=$1, description=$2, evidence=$3, thread_ids=$4,
                            categories=$5, source_count=$6, status='active',
                            updated_at=CURRENT_TIMESTAMP
-                       WHERE id=$7""",
+                       WHERE id=$7 AND user_id=$8""",
                     g["title"],
                     g["description"],
                     json.dumps(evidence, ensure_ascii=False),
@@ -118,6 +126,7 @@ async def _generate_in_background(user_id: int):
                     json.dumps(g["categories"], ensure_ascii=False),
                     len(evidence),
                     eid,
+                    user_id,
                 )
                 continue
 
@@ -148,7 +157,9 @@ async def _generate_in_background(user_id: int):
             for r in active_rows:
                 if r["id"] not in chosen_ids:
                     await db.execute(
-                        "UPDATE goals SET status='archived' WHERE id=$1", r["id"]
+                        "UPDATE goals SET status='archived' WHERE id=$1 AND user_id=$2",
+                        r["id"],
+                        user_id,
                     )
                     archived += 1
         print(

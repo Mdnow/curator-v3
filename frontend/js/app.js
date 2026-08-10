@@ -501,14 +501,16 @@ async function generateGoals() {
     statusEl.style.display = 'flex';
     await api('POST', '/goals/generate');
     toast('пересобираю созвездие');
-    setTimeout(loadGoals, 1500);
-    setTimeout(loadGoals, 4000);
-    setTimeout(loadGoals, 8000);
+    let reloads = 0;
+    const t = setInterval(async () => {
+      reloads++;
+      try { await loadGoals(); } catch (e) {}
+      if (reloads >= 20) { clearInterval(t); statusEl.style.display = 'none'; }
+    }, 4000);
+    setTimeout(() => { clearInterval(t); statusEl.style.display = 'none'; }, 90000);
   } catch (e) {
     statusEl.style.display = 'none';
     toast(e.message || 'ошибка');
-  } finally {
-    statusEl.style.display = 'none';
   }
 }
 
