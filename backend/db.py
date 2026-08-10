@@ -163,6 +163,9 @@ async def init_db():
         await db.execute(
             "CREATE INDEX IF NOT EXISTS idx_goals_user ON goals(user_id, created_at)"
         )
+        await db.execute(
+            "ALTER TABLE goals ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active'"
+        )
         await db.execute("""
             CREATE TABLE IF NOT EXISTS day_essences (
                 id SERIAL PRIMARY KEY,

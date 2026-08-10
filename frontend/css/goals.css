@@ -15,6 +15,7 @@
 }
 .goal-card:hover { border-color: var(--border-focus); }
 .goal-card.pinned { border-color: var(--accent); }
+.goal-card.archived { opacity: 0.55; }
 
 .goal-header { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-sm); }
 .goal-pin {
@@ -25,6 +26,15 @@
 .goal-pin:hover { color: var(--accent); }
 .goal-card.pinned .goal-pin { color: var(--accent); }
 .goal-title { flex: 1; font-size: var(--font-lg); font-weight: 500; color: var(--text-1); }
+.goal-actions { display: flex; align-items: center; gap: var(--space-xs); }
+.goal-archive, .goal-activate {
+  background: none; border: none; color: var(--text-3); cursor: pointer;
+  font-size: var(--font-xs); padding: var(--space-xs); border-radius: var(--radius-xs);
+  transition: all 0.15s; opacity: 0;
+}
+.goal-card:hover .goal-archive, .goal-card:hover .goal-activate { opacity: 1; }
+.goal-archive:hover { color: var(--text-2); background: var(--surface-hover); }
+.goal-activate:hover { color: var(--accent); background: var(--accent-bg); }
 .goal-delete {
   background: none; border: none; color: var(--text-3); cursor: pointer;
   font-size: var(--font-xs); padding: var(--space-xs); border-radius: var(--radius-xs);
@@ -40,7 +50,23 @@
   background: var(--accent-bg); border-radius: var(--radius-xs);
   padding: 2px 8px;
 }
-.goal-sources { font-size: var(--font-xs); color: var(--text-3); margin-bottom: var(--space-sm); }
+
+.goal-strength { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-sm); }
+.goal-strength-bar {
+  flex: 0 0 90px; height: 4px; border-radius: 2px;
+  background: var(--border); overflow: hidden;
+}
+.goal-strength-fill { height: 100%; background: var(--accent); border-radius: 2px; }
+.goal-strength-label { font-size: var(--font-xs); color: var(--text-3); }
+
+.goals-archived-block { margin-top: var(--space-lg); }
+.goals-archived-toggle {
+  background: none; border: 1px dashed var(--border); color: var(--text-3);
+  cursor: pointer; border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-sm); width: 100%; transition: all 0.15s;
+}
+.goals-archived-toggle:hover { color: var(--text-2); border-color: var(--border-focus); }
+.goals-archived-list { display: flex; flex-direction: column; gap: var(--space-md); margin-top: var(--space-md); }
 
 .goal-evidence { display: flex; flex-direction: column; gap: var(--space-xs); border-top: 1px solid var(--border); padding-top: var(--space-sm); }
 .goal-quote {

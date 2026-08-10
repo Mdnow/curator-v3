@@ -444,18 +444,28 @@ async function toggleTaskFavorite(id) { try { const r = await api('POST', '/task
 async function loadGoals() {
   hideAllSections(); $('#goalsSection').style.display = 'block';
   try {
-    const goals = await api('GET', '/goals');
+    const data = await api('GET', '/goals');
+    const active = data.active || [];
+    const archived = data.archived || [];
     const listEl = $('#goalsList');
     const emptyEl = $('#goalsEmpty');
-    if (!goals.length) { listEl.innerHTML = ''; emptyEl.style.display = 'block'; return; }
+    if (!active.length && !archived.length) { listEl.innerHTML = ''; emptyEl.style.display = 'block'; return; }
     emptyEl.style.display = 'none';
-    listEl.innerHTML = goals.map(renderGoal).join('');
+    const max = Math.max(1, ...active.map(g => g.source_count || 0));
+    let html = active.map(g => renderGoal(g, max)).join('');
+    if (archived.length) {
+      html += `<div class="goals-archived-block">
+        <button class="goals-archived-toggle" data-archived-toggle>прошлые направления · ${archived.length}</button>
+        <div class="goals-archived-list" style="display:none">${archived.map(g => renderGoal(g, max, true)).join('')}</div>
+      </div>`;
+    }
+    listEl.innerHTML = html;
   } catch (e) {
     $('#goalsList').innerHTML = '<div class="empty-state"><div class="empty-icon">&#9888;</div><div class="empty-text">ошибка загрузки</div></div>';
   }
 }
 
-function renderGoal(goal) {
+function renderGoal(goal, maxCount = 1, isArchived = false) {
   const cats = (goal.categories || []).map(c => `<span class="goal-cat">${esc(c)}</span>`).join('');
   const ev = (goal.evidence || []).map(e =>
     `<button class="goal-quote" data-goal-date="${esc(e.note_date || '')}">
@@ -463,15 +473,24 @@ function renderGoal(goal) {
        ${e.note_date ? `<span class="goal-quote-date">${esc(e.note_date)}</span>` : ''}
      </button>`
   ).join('');
-  return `<div class="goal-card ${goal.is_pinned ? 'pinned' : ''}">
+  const pct = maxCount > 0 ? Math.round((goal.source_count / maxCount) * 100) : 0;
+  const strength = `<div class="goal-strength">
+    <div class="goal-strength-bar"><div class="goal-strength-fill" style="width:${Math.max(6, pct)}%"></div></div>
+    <div class="goal-strength-label">${goal.source_count} подтверждений${goal.last_activity ? ` · последнее ${esc(goal.last_activity)}` : ''}</div>
+  </div>`;
+  const pinBtn = isArchived ? '' : `<button class="goal-pin" data-goal-pin="${goal.id}" title="закрепить">${goal.is_pinned ? '&#9733;' : '&#9734;'}</button>`;
+  const actions = isArchived
+    ? `<button class="goal-activate" data-goal-activate="${goal.id}" title="вернуть в созвездие">вернуть</button>`
+    : `<button class="goal-archive" data-goal-archive="${goal.id}" title="убрать из зеркала">в архив</button>`;
+  return `<div class="goal-card ${goal.is_pinned ? 'pinned' : ''} ${isArchived ? 'archived' : ''}">
     <div class="goal-header">
-      <button class="goal-pin" data-goal-pin="${goal.id}" title="закрепить">${goal.is_pinned ? '&#9733;' : '&#9734;'}</button>
+      ${pinBtn}
       <div class="goal-title">${esc(goal.title)}</div>
-      <button class="goal-delete" data-goal-delete="${goal.id}" title="удалить">&#10005;</button>
+      <div class="goal-actions">${actions}<button class="goal-delete" data-goal-delete="${goal.id}" title="удалить">&#10005;</button></div>
     </div>
     ${goal.description ? `<div class="goal-desc">${esc(goal.description)}</div>` : ''}
     ${cats ? `<div class="goal-cats">${cats}</div>` : ''}
-    ${goal.source_count ? `<div class="goal-sources">${goal.source_count} источника</div>` : ''}
+    ${strength}
     <div class="goal-evidence">${ev}</div>
   </div>`;
 }
@@ -481,7 +500,7 @@ async function generateGoals() {
   try {
     statusEl.style.display = 'flex';
     await api('POST', '/goals/generate');
-    toast('цели генерируются в фоне');
+    toast('пересобираю созвездие');
     setTimeout(loadGoals, 1500);
     setTimeout(loadGoals, 4000);
     setTimeout(loadGoals, 8000);
@@ -495,6 +514,12 @@ async function generateGoals() {
 
 async function toggleGoalPin(id) {
   try { await api('POST', '/goals/' + id + '/pin'); await loadGoals(); } catch (e) { toast('ошибка'); }
+}
+async function archiveGoal(id) {
+  try { await api('POST', '/goals/' + id + '/archive'); toast('в архив'); await loadGoals(); } catch (e) { toast('ошибка'); }
+}
+async function activateGoal(id) {
+  try { await api('POST', '/goals/' + id + '/activate'); toast('возвращено в созвездие'); await loadGoals(); } catch (e) { toast('ошибка'); }
 }
 async function deleteGoal(id) {
   try { await api('DELETE', '/goals/' + id); toast('удалено'); await loadGoals(); } catch (e) { toast('ошибка'); }
@@ -1058,8 +1083,18 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#goalsSection').addEventListener('click', e => {
     const pin = e.target.closest('[data-goal-pin]');
     if (pin) { toggleGoalPin(parseInt(pin.dataset.goalPin)); return; }
+    const arc = e.target.closest('[data-goal-archive]');
+    if (arc) { archiveGoal(parseInt(arc.dataset.goalArchive)); return; }
+    const act = e.target.closest('[data-goal-activate]');
+    if (act) { activateGoal(parseInt(act.dataset.goalActivate)); return; }
     const del = e.target.closest('[data-goal-delete]');
     if (del) { deleteGoal(parseInt(del.dataset.goalDelete)); return; }
+    const toggle = e.target.closest('[data-archived-toggle]');
+    if (toggle) {
+      const list = toggle.nextElementSibling;
+      list.style.display = list.style.display === 'none' ? 'block' : 'none';
+      return;
+    }
     const quote = e.target.closest('[data-goal-date]');
     if (quote && quote.dataset.goalDate) {
       selectedDate = quote.dataset.goalDate;
