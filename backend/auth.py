@@ -1,10 +1,12 @@
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
-from jose import jwt, JWTError
-from fastapi import HTTPException, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from backend.config import SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRE_HOURS
+
+import jwt
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from backend.config import JWT_ALGORITHM, JWT_EXPIRE_HOURS, SECRET_KEY
 
 security = HTTPBearer()
 
@@ -35,7 +37,7 @@ def decode_token(token: str) -> int:
         if uid is None:
             raise HTTPException(401, "невалидный токен")
         return int(uid)
-    except JWTError:
+    except jwt.InvalidTokenError:
         raise HTTPException(401, "невалидный токен")
 
 
