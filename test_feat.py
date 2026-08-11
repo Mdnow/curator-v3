@@ -3,12 +3,18 @@ import time
 
 BASE = "http://127.0.0.1:8765"
 
-# Register
+# Register (или login, если юзер уже существует)
 r = httpx.post(
     f"{BASE}/api/register",
     json={"username": "testfeat5", "password": "test123"},
-    timeout=8,
+    timeout=30,
 )
+if r.status_code != 200:
+    r = httpx.post(
+        f"{BASE}/api/login",
+        json={"username": "testfeat5", "password": "test123"},
+        timeout=30,
+    )
 token = r.json()["token"]
 h = {"Authorization": f"Bearer {token}"}
 print("=== Auth OK ===")
@@ -26,14 +32,14 @@ for i, text in enumerate(
         f"{BASE}/api/notes",
         json={"content": text, "note_date": "2026-07-22"},
         headers=h,
-        timeout=8,
+        timeout=30,
     )
     print(f"  Note {i + 1}: {r.status_code} {r.json()}")
 
-print("  Waiting 5s for AI background analysis...")
-time.sleep(5)
+print("  Waiting 20s for AI background analysis...")
+time.sleep(20)
 
-r = httpx.get(f"{BASE}/api/notes/threads", headers=h, timeout=8)
+r = httpx.get(f"{BASE}/api/notes/threads", headers=h, timeout=30)
 print(f"  GET /api/notes/threads: {r.status_code}")
 threads = r.json()
 print(f"  Found {len(threads)} threads")
@@ -43,7 +49,7 @@ for t in threads:
     )
 
 # Check notes have thread_id
-r = httpx.get(f"{BASE}/api/notes?date=2026-07-22", headers=h, timeout=8)
+r = httpx.get(f"{BASE}/api/notes?date=2026-07-22", headers=h, timeout=30)
 notes = r.json()
 for n in notes:
     print(
@@ -52,7 +58,7 @@ for n in notes:
 
 # === 2. PROACTIVE INSIGHTS ===
 print("\n=== 2. PROACTIVE INSIGHTS ===")
-r = httpx.get(f"{BASE}/api/insights/daily", headers=h, timeout=15)
+r = httpx.get(f"{BASE}/api/insights/daily", headers=h, timeout=90)
 print(f"  Status: {r.status_code}")
 if r.status_code == 200:
     d = r.json()
@@ -76,7 +82,7 @@ r = httpx.post(
         "emotion_label": "спокойно",
     },
     headers=h,
-    timeout=8,
+    timeout=30,
 )
 print(f"  Night dream: {r.status_code} {r.json()}")
 
@@ -90,15 +96,15 @@ r = httpx.post(
         "sleep_quality": 4,
     },
     headers=h,
-    timeout=8,
+    timeout=30,
 )
 print(f"  Morning dream: {r.status_code} {r.json()}")
 
-print("  Waiting 5s for AI analysis...")
-time.sleep(5)
+print("  Waiting 20s for AI analysis...")
+time.sleep(20)
 
 # Get dreams
-r = httpx.get(f"{BASE}/api/dreams?days=7", headers=h, timeout=8)
+r = httpx.get(f"{BASE}/api/dreams?days=7", headers=h, timeout=30)
 print(f"  GET /api/dreams: {r.status_code}")
 dreams = r.json()
 print(f"  Found {len(dreams)} dreams")
@@ -114,7 +120,7 @@ for d in dreams:
         print(f"      question: {question[:80]}")
 
 # Dream insight
-r = httpx.get(f"{BASE}/api/dreams/insight", headers=h, timeout=15)
+r = httpx.get(f"{BASE}/api/dreams/insight", headers=h, timeout=90)
 print(f"\n  Dream insight: {r.status_code}")
 if r.status_code == 200:
     print(f"  {r.json().get('insight', '')[:200]}")
@@ -122,7 +128,7 @@ else:
     print(f"  Error: {r.text[:300]}")
 
 # Dream patterns
-r = httpx.get(f"{BASE}/api/dreams/patterns?days=7", headers=h, timeout=15)
+r = httpx.get(f"{BASE}/api/dreams/patterns?days=7", headers=h, timeout=90)
 print(f"\n  Dream patterns: {r.status_code}")
 if r.status_code == 200:
     d = r.json()

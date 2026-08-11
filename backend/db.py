@@ -153,6 +153,7 @@ async def init_db():
             ("ai_theses", "TEXT", "'[]'"),
             ("thread_id", "TEXT", "NULL"),
             ("mood", "TEXT", "''"),
+            ("ai_title", "TEXT", "NULL"),
         ]:
             if col not in note_col_names:
                 await db.execute(

@@ -33,7 +33,8 @@ async def _analyze_in_background(note_id: int, content: str, user_id: int):
 
         if ai.get("error") is None and (ai.get("summary") or ai.get("category")):
             await db.execute(
-                "UPDATE notes SET ai_summary=$1, ai_category=$2, ai_sentiment=$3, ai_keyphrases=$4, ai_theses=$5 WHERE id=$6",
+                "UPDATE notes SET ai_title=$1, ai_summary=$2, ai_category=$3, ai_sentiment=$4, ai_keyphrases=$5, ai_theses=$6 WHERE id=$7",
+                ai.get("title", ""),
                 ai.get("summary", ""),
                 ai.get("category", ""),
                 ai.get("sentiment", 0.0),
@@ -94,7 +95,7 @@ async def get_notes(
         offset = (page - 1) * limit
         rows = await db.fetch(
             """SELECT id, content_encrypted, note_date, tags, is_favorited,
-                      ai_summary, ai_category, ai_sentiment, ai_keyphrases, ai_theses,
+                      ai_title, ai_summary, ai_category, ai_sentiment, ai_keyphrases, ai_theses,
                       thread_id, mood, created_at, updated_at
                FROM notes WHERE user_id=$1 AND note_date=$2
                ORDER BY created_at DESC LIMIT $3 OFFSET $4""",
@@ -134,6 +135,7 @@ async def get_notes(
                     "note_date": r["note_date"],
                     "tags": tags,
                     "is_favorited": r["is_favorited"],
+                    "ai_title": r["ai_title"] or "",
                     "ai_summary": r["ai_summary"] or "",
                     "ai_category": r["ai_category"] or "",
                     "ai_sentiment": float(r["ai_sentiment"])
@@ -194,7 +196,8 @@ async def _reanalyze_in_background(note_ids: list[int], user_id: int):
             ai = await analyze_note(content)
             if ai.get("error") is None and (ai.get("summary") or ai.get("category")):
                 await db.execute(
-                    "UPDATE notes SET ai_summary=$1, ai_category=$2, ai_sentiment=$3, ai_keyphrases=$4, ai_theses=$5 WHERE id=$6",
+                    "UPDATE notes SET ai_title=$1, ai_summary=$2, ai_category=$3, ai_sentiment=$4, ai_keyphrases=$5, ai_theses=$6 WHERE id=$7",
+                    ai.get("title", ""),
                     ai.get("summary", ""),
                     ai.get("category", ""),
                     ai.get("sentiment", 0.0),
@@ -219,13 +222,14 @@ async def import_note(
         theses_json = json.dumps(req.ai_theses or [])
         row = await db.fetchrow(
             """INSERT INTO notes (user_id, content_encrypted, note_date, tags, mood,
-                                 ai_summary, ai_category, ai_sentiment, ai_keyphrases, ai_theses)
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id""",
+                                 ai_title, ai_summary, ai_category, ai_sentiment, ai_keyphrases, ai_theses)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id""",
             user_id,
             enc,
             req.note_date,
             tags_json,
             req.mood or "",
+            req.ai_title or "",
             req.ai_summary or "",
             req.ai_category or "",
             req.ai_sentiment,

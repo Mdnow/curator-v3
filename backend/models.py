@@ -45,6 +45,7 @@ class ImportNoteReq(BaseModel):
     note_date: str
     tags: list[str] = []
     mood: Optional[str] = None
+    ai_title: str = ""
     ai_summary: str = ""
     ai_category: str = ""
     ai_sentiment: float = 0.0

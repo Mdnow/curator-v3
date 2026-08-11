@@ -181,8 +181,10 @@ async function loadNotes() {
       for (const note of items) {
         const t = new Date(note.created_at);
         const time = String(t.getHours()).padStart(2,'0') + ':' + String(t.getMinutes()).padStart(2,'0');
+        const title = noteTitle(note);
+        const summary = noteSummary(note);
         let aiHtml = '';
-        if (note.ai_summary || note.ai_category || (note.ai_theses && note.ai_theses.length)) {
+        if (note.ai_category || (note.ai_theses && note.ai_theses.length)) {
           const sent = note.ai_sentiment;
           const sentLabel = sent > 0.3 ? 'светлое' : sent < -0.3 ? 'тёмное' : '';
           const thesesHtml = (note.ai_theses && note.ai_theses.length)
@@ -190,7 +192,6 @@ async function loadNotes() {
             : '';
           aiHtml = `<div class="note-ai">
             ${note.ai_category ? `<span class="note-ai-category">${esc(note.ai_category)}</span>` : ''}
-            ${note.ai_summary ? `<span class="note-ai-summary">${esc(note.ai_summary)}</span>` : ''}
             ${thesesHtml}
             ${sentLabel ? `<span class="note-ai-sentiment">${sentLabel}</span>` : ''}
           </div>`;
@@ -200,14 +201,19 @@ async function loadNotes() {
           threadHtml = `<div class="note-thread" data-thread="${esc(note.thread_id)}">нить: ${esc(note.thread_id.slice(0,8))}</div>`;
         }
         html += `<div class="note-card ${note.is_favorited ? 'favorited' : ''}" data-note-id="${note.id}">
-          <div class="note-content" data-note-text="${esc(note.content)}">${esc(note.content)}</div>
-          ${threadHtml}${aiHtml}
+          <div class="note-title">${esc(title)}</div>
+          <div class="note-summary">${esc(summary)}</div>
+          <div class="note-body" hidden>
+            <div class="note-content" data-note-text="${esc(note.content)}">${esc(note.content)}</div>
+            ${threadHtml}${aiHtml}
+          </div>
           <div class="note-actions">
             <button class="note-action-btn" data-edit-note="${note.id}" title="редактировать">&#9998;</button>
             <button class="note-action-btn" data-discuss-note="${note.id}" data-discuss-text="${esc(note.content)}" title="обсудить с куратором">&#9671;</button>
           </div>
           <div class="note-meta">
             <button class="note-fav" data-fav-note="${note.id}" title="в избранное">${note.is_favorited ? '&#9733;' : '&#9734;'}</button>
+            <span class="note-expand-btn" data-expand-note="${note.id}" title="развернуть текст">показать текст</span>
             <span class="note-time">${time}</span>
             ${note.mood ? `<span class="note-mood">${esc(note.mood)}</span>` : ''}
             <button class="note-delete" data-id="${note.id}">&#10005;</button>
@@ -227,6 +233,36 @@ function clusterNotes(notes) {
   const groups = {};
   for (const note of notes) { const cat = note.ai_category || 'Другое'; if (!groups[cat]) groups[cat] = []; groups[cat].push(note); }
   return Object.fromEntries(Object.entries(groups).sort((a, b) => b[1].length - a[1].length));
+}
+
+function noteTitle(note) {
+  if (note.ai_title && note.ai_title.trim()) return note.ai_title.trim().slice(0, 80);
+  const first = (note.content || '').split('\n')[0].trim();
+  return (first || 'Заметка').slice(0, 80);
+}
+
+function noteSummary(note) {
+  if (note.ai_summary && note.ai_summary.trim()) return note.ai_summary.trim().slice(0, 200);
+  const lines = (note.content || '').split('\n').map(l => l.trim()).filter(Boolean);
+  const rest = lines.slice(1).join(' ') || lines[0] || '';
+  return rest.slice(0, 200);
+}
+
+function toggleNoteBody(id) {
+  const card = document.querySelector(`.note-card[data-note-id="${id}"]`);
+  if (!card) return;
+  const body = card.querySelector('.note-body');
+  const btn = card.querySelector('.note-expand-btn');
+  if (!body) return;
+  if (body.hasAttribute('hidden')) {
+    body.removeAttribute('hidden');
+    card.classList.add('expanded');
+    if (btn) btn.textContent = 'свернуть';
+  } else {
+    body.setAttribute('hidden', '');
+    card.classList.remove('expanded');
+    if (btn) btn.textContent = 'показать текст';
+  }
 }
 
 function hideHeadsUp() { const hu = $('#headsUp'); if (hu) hu.style.display = 'none'; }
@@ -269,6 +305,8 @@ let editingNoteId = null;
 function startEditNote(id) {
   const card = document.querySelector(`.note-card[data-note-id="${id}"]`);
   if (!card) return;
+  const body = card.querySelector('.note-body');
+  if (body && body.hasAttribute('hidden')) toggleNoteBody(id);
   const contentEl = card.querySelector('.note-content');
   const oldText = contentEl.dataset.noteText;
   editingNoteId = id;
@@ -1060,6 +1098,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (saveEdit) { saveEditNote(parseInt(saveEdit.dataset.saveEdit)); return; }
     const cancelEdit = e.target.closest('[data-cancel-edit]');
     if (cancelEdit) { cancelEditNote(parseInt(cancelEdit.dataset.cancelEdit)); return; }
+    const expand = e.target.closest('[data-expand-note]');
+    if (expand) { toggleNoteBody(parseInt(expand.dataset.expandNote)); return; }
+    const card = e.target.closest('.note-card');
+    if (card && card.dataset.noteId && !card.querySelector('.note-edit-input')) {
+      toggleNoteBody(parseInt(card.dataset.noteId));
+      return;
+    }
   });
   $('#notesSection').addEventListener('keydown', e => {
     if (e.target.id === 'noteEditInput') {
