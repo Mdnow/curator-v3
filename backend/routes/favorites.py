@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends
 from backend.db import get_db
 from backend.auth import get_current_user
 from backend.crypto import decrypt
-import json
 
 router = APIRouter(prefix="/api/favorites", tags=["favorites"])
 

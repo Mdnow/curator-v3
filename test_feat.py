@@ -1,6 +1,5 @@
 import httpx
 import time
-import json
 
 BASE = "http://127.0.0.1:8765"
 

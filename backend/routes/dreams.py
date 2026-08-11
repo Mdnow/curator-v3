@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends, BackgroundTasks
 from backend.db import get_db
 from backend.auth import get_current_user
 from backend.crypto import encrypt, decrypt
@@ -149,7 +149,7 @@ async def dream_insight_endpoint(user_id: int = Depends(get_current_user)):
         night_row = await db.fetchrow(
             """SELECT content_encrypted, sleep_quality
                FROM dreams WHERE user_id=$1 AND dream_type='night'
-               AND DATE(created_at) = $2
+               AND DATE(created_at) = $2::text
                ORDER BY created_at DESC LIMIT 1""",
             user_id,
             today,
@@ -157,7 +157,7 @@ async def dream_insight_endpoint(user_id: int = Depends(get_current_user)):
         morning_row = await db.fetchrow(
             """SELECT content_encrypted
                FROM dreams WHERE user_id=$1 AND dream_type='morning'
-               AND DATE(created_at) = $2
+               AND DATE(created_at) = $2::text
                ORDER BY created_at DESC LIMIT 1""",
             user_id,
             today,

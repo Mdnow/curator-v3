@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
-from backend.db import get_db
+from backend.db import get_db, get_pool
 from backend.auth import get_current_user
 from backend.crypto import encrypt, decrypt
 from backend.models import NoteReq, NoteUpdateReq, ImportNoteReq

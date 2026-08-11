@@ -19,7 +19,7 @@ async def test():
             )
         token = r.json()["token"]
         h = {"Authorization": f"Bearer {token}"}
-        print(f"Auth: OK")
+        print("Auth: OK")
 
         # === 1. THOUGHT THREADING ===
         print("\n=== 1. THOUGHT THREADING ===")

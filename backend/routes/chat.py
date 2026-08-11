@@ -1,13 +1,10 @@
-from fastapi import APIRouter, Depends
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException
 from backend.db import get_db
 from backend.auth import get_current_user
 from backend.crypto import encrypt, decrypt
 from backend.models import ChatReq
 from backend.ai import chat_with_context, CHAT_SYSTEM
 from datetime import datetime, timedelta
-import json
-import asyncio
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
