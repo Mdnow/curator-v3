@@ -40,11 +40,11 @@
 | AI | OpenCode Zen (free-модели, ротация) + OpenRouter fallback, embed — OpenRouter |
 | Шифрование | все данные пользователя зашифрованы (Fernet) |
 | Frontend | vanilla JS + CSS, mobile-first, без эмодзи |
-| Деплой | Railway (Docker), ручной деплой через CLI |
+| Деплой | Render (Docker, free, регион франкфурт), деплой через git push |
 
 ## Факты
 
-- Прод: `https://curator-v3-production.up.railway.app`
+- Прод: `https://curator-v3.onrender.com`
 - Пользователь: `mdnow` (Marina), single-user.
 - AI: OpenCode Zen (free-модели) первым провайдером, OpenRouter — fallback (embed — OpenRouter).
 - Кодировка/стиль: всё на русском, без эмодзи в UI.

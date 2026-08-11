@@ -69,11 +69,11 @@ mindmap
       OpenRouter
         chat: 6 free-моделей
         embeddings: nemotron-3-embed
-      Neon PostgreSQL (Railway)
-    Деплой Railway
+      Neon PostgreSQL
+    Деплой Render
       Dockerfile
-      railway.json
-      .railwayignore
+      render.yaml (plan free)
+      .dockerignore
 ```
 
 ## 2. Взаимосвязи модулей (backend)
@@ -132,5 +132,5 @@ flowchart LR
 | `/api/insights` | insights.py | daily, day-map, essence |
 | `/api/favorites` | favorites.py | избранное |
 | `/api/backup` | backup.py | выгрузка всех данных (JSON) |
-| `/api/health` | health.py | проверка для Railway |
+| `/api/health` | health.py | проверка для Render |
 | `/api/register` `/api/login` `/api/me` | main.py | auth-эндпоинты |
