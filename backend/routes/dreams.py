@@ -144,12 +144,12 @@ async def dream_insight_endpoint(user_id: int = Depends(get_current_user)):
     from backend.ai import dream_insight as ai_dream_insight
 
     async with get_db() as db:
-        today = await db.fetchval("SELECT CURRENT_DATE::text")
+        today = await db.fetchval("SELECT CURRENT_DATE")
 
         night_row = await db.fetchrow(
             """SELECT content_encrypted, sleep_quality
                FROM dreams WHERE user_id=$1 AND dream_type='night'
-               AND DATE(created_at) = $2::text
+               AND DATE(created_at) = $2
                ORDER BY created_at DESC LIMIT 1""",
             user_id,
             today,
@@ -157,7 +157,7 @@ async def dream_insight_endpoint(user_id: int = Depends(get_current_user)):
         morning_row = await db.fetchrow(
             """SELECT content_encrypted
                FROM dreams WHERE user_id=$1 AND dream_type='morning'
-               AND DATE(created_at) = $2::text
+               AND DATE(created_at) = $2
                ORDER BY created_at DESC LIMIT 1""",
             user_id,
             today,
@@ -181,7 +181,7 @@ async def dream_insight_endpoint(user_id: int = Depends(get_current_user)):
 
         note_rows = await db.fetch(
             """SELECT content_encrypted, note_date FROM notes
-               WHERE user_id=$1 AND note_date >= $2::text - INTERVAL '7 days'
+               WHERE user_id=$1 AND note_date >= $2 - INTERVAL '7 days'
                ORDER BY created_at DESC LIMIT 20""",
             user_id,
             today,
