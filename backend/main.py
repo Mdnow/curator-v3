@@ -20,13 +20,18 @@ from backend.routes.goals import router as goals_router
 
 app = FastAPI(title="Curator v3")
 
+_render_url = os.getenv("RENDER_EXTERNAL_URL", "")
+_origins = [
+    "https://curator-v3-production.up.railway.app",
+    "http://127.0.0.1:8000",
+    "http://localhost:8000",
+]
+if _render_url:
+    _origins.append(_render_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://curator-v3-production.up.railway.app",
-        "http://127.0.0.1:8000",
-        "http://localhost:8000",
-    ],
+    allow_origins=_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: curator-v3
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: ZEN_API_KEY
+        sync: false
+      - key: CURATOR_SECRET
+        sync: false
+      - key: CURATOR_ENCRYPTION_KEY
+        sync: false

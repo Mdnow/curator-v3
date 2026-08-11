@@ -1,0 +1,12 @@
+.env
+.git
+*.png
+test_all.py
+test_feat.py
+__pycache__
+*.pyc
+.ruff_cache
+*.md
+.dockerignore
+.railwayignore
+.gitignore
