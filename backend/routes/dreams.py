@@ -181,7 +181,7 @@ async def dream_insight_endpoint(user_id: int = Depends(get_current_user)):
 
         note_rows = await db.fetch(
             """SELECT content_encrypted, note_date FROM notes
-               WHERE user_id=$1 AND note_date >= $2 - INTERVAL '7 days'
+               WHERE user_id=$1 AND note_date::date >= $2::date - INTERVAL '7 days'
                ORDER BY created_at DESC LIMIT 20""",
             user_id,
             today,
