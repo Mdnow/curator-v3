@@ -716,3 +716,43 @@ curl.exe -s -o resp.json -w "%{http_code}" https://<domain>/api/health
 - Ярлык «Проверка куратора» на рабочем столе OneDrive → `curator-v3/verify.bat`.
 - Коммит `9da5ce6`.
 - Живой прогон генерации целей на реальных данных — **не завершён**. Закрыть: прод → «Цели» → «обновить цели» (реальные данные `mdnow`), либо дождаться стабильной сети и прогнать `goals_probe.py`.
+
+---
+
+## 20. 11.08.2026 — VPN заработал: баг `/api/dreams/insight` (500), деплой, живой прогон целей
+
+### 20.1. Задача
+Закрыть хвосты, зависшие из-за блокировки Railway CDN оператором РФ (VPN не было): проверить прод, live-прогон целей (§19.5), деплой фиксов.
+
+### 20.2. Баг `/api/dreams/insight` → 500 (asyncpg DataError)
+`python test_feat.py` (интеграционный, реальный Neon) показал 500 на `GET /api/dreams/insight`.
+
+Причина: `SELECT CURRENT_DATE::text` + `note_date >= $2::text - INTERVAL '7 days'`. В PostgreSQL `date - interval` → `timestamp`; сравнение `timestamp >= date` в `$2::text` — asyncpg неявно типизировал параметр как `interval` (из-за `- INTERVAL` в том же выражении) → `DataError: invalid value for interval` (toordinal).
+
+Исправление (`backend/routes/dreams.py`):
+- `CURRENT_DATE::text` → `CURRENT_DATE`;
+- `note_date >= $2::text - INTERVAL` → `note_date::date >= $2::date - INTERVAL '7 days'`.
+
+Проверка: live на проде → 200 OK (до фикса было 500). `py_compile` OK, `ruff check` 0.
+
+### 20.3. Прод не имел `/api/notes/import` — деплой доехал сам
+`railway deployment list`: деплой `90269ed5` (11.08 08:54) SUCCESS, прод отдаёт `/api/notes/import` (39 роутов по openapi). Fallback в tiktok-watcher больше не нужен.
+
+### 20.4. Деплой фикса снов на прод
+- `railway link -p curator-v3` (аккаунт `691553@bk.ru`) → `railway up --detach` → деплой `90269ed5` SUCCESS.
+- Live-проверка: `/api/dreams/insight` → 200, `/api/notes` → 200, `/api/goals` → 200.
+- `GET /api/insights` → 404 — старый маршрут удалён ранее, не баг.
+
+### 20.5. Живой прогон генерации целей — закрыт (§19.5)
+`POST /api/goals/generate` (mdnow) → `{"status":"started"}` → после пересборки активных целей стало 5 (было 4): появилась «Аутентичность через исследование» (id 12), «Адаптация под нейроотличимость» (id 8) вернулась из архивных. Источники — 3 заметки на цель.
+
+### 20.6. Смежные правки (закрыли в этой же волне)
+- `CURATOR_URL` на проде tiktok-watcher указывал на старый домен `-c830` без `/import` → каждый пуш падал на fallback `POST /api/notes`, AI-поля watcher терялись. Исправлено на проде watcher (деплой `5c5de660`, аккаунт `dnlchk.mn@gmail.com`). Подробности — журнал tiktok-watcher.
+
+### 20.7. Проверка
+- `python test_feat.py` (заметки/инсайты/паттерны) — OK; `GET /api/dreams/insight` — найден и исправлен 500.
+- Коммиты: `c11d667` (убраны `::text`), `51c7345` (явный каст `::date`).
+
+### 20.8. Замечания
+- Интеграционные тесты `/api/goals` по-прежнему не покрыты (FUTURE_TASKS.md) — живой прогон на проде закрыл суть проверки, но тест в `test_feat.py` добавить стоит.
+- Переключение Railway CLI между двумя аккаунтами (`691553@bk.ru` ↔ `dnlchk.mn@gmail.com`) — каждый раз `railway login` с выбором аккаунта в браузере; привязка `railway link` живёт по папкам (curator-v3, tiktok-watcher, Temp\opencode\ttw-deploy).

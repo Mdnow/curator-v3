@@ -1,24 +1,58 @@
+import asyncio
 import asyncpg
 from contextlib import asynccontextmanager
 from backend.config import DATABASE_URL
 
 _pool: asyncpg.Pool | None = None
 
+# Разрывы/перезапуск соединения — на них можно безопасно повторить запрос
+_RETRYABLE = (
+    asyncpg.ConnectionDoesNotExistError,
+    asyncpg.InterfaceError,
+    ConnectionResetError,
+    OSError,
+)
+
 
 async def get_pool() -> asyncpg.Pool:
     global _pool
     if _pool is None:
-        _pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
+        _pool = await asyncpg.create_pool(
+            DATABASE_URL,
+            min_size=1,
+            max_size=10,
+            # Neon гасит compute после ~5 мин простоя и рвёт idle-коннекты.
+            # Короткий lifetime заставляет пул сам отбрасывать протухшие.
+            max_inactive_connection_lifetime=30.0,
+        )
     return _pool
+
+
+async def _healthy_connection() -> asyncpg.Connection:
+    """Взять коннект из пула, проверить живость, при обрыве переподключиться."""
+    pool = await get_pool()
+    last_err: Exception | None = None
+    for attempt in range(4):
+        conn = await pool.acquire()
+        try:
+            await conn.fetchval("SELECT 1")
+            return conn
+        except _RETRYABLE as e:
+            last_err = e
+            await pool.release(conn)
+            await asyncio.sleep(0.2 * (2**attempt))
+    if last_err is not None:
+        raise last_err
+    raise RuntimeError("Не удалось получить живое соединение с БД")
 
 
 @asynccontextmanager
 async def get_db():
-    pool = await get_pool()
-    conn = await pool.acquire()
+    conn = await _healthy_connection()
     try:
         yield conn
     finally:
+        pool = await get_pool()
         await pool.release(conn)
 
 
