@@ -27,6 +27,7 @@ function todayStr() {
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function escAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
 function toast(msg) { const el = $('#toast'); el.textContent = msg; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2000); }
 function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 
@@ -204,12 +205,12 @@ async function loadNotes() {
           <div class="note-title">${esc(title)}</div>
           <div class="note-summary">${esc(summary)}</div>
           <div class="note-body" hidden>
-            <div class="note-content" data-note-text="${esc(note.content)}">${esc(note.content)}</div>
+            <div class="note-content" data-note-text="${escAttr(note.content)}">${esc(note.content)}</div>
             ${threadHtml}${aiHtml}
           </div>
           <div class="note-actions">
             <button class="note-action-btn" data-edit-note="${note.id}" title="редактировать">&#9998;</button>
-            <button class="note-action-btn" data-discuss-note="${note.id}" data-discuss-text="${esc(note.content)}" title="обсудить с куратором">&#9671;</button>
+            <button class="note-action-btn" data-discuss-note="${note.id}" data-discuss-text="${escAttr(note.content)}" title="обсудить с куратором">&#9671;</button>
           </div>
           <div class="note-meta">
             <button class="note-fav" data-fav-note="${note.id}" title="в избранное">${note.is_favorited ? '&#9733;' : '&#9734;'}</button>
@@ -273,7 +274,7 @@ function showHeadsUp(related) {
   if (!hu || !list) return;
   list.innerHTML = related.map(n => {
     const snippet = (n.ai_summary || n.content || '').slice(0, 110);
-    return `<div class="heads-up-item" data-related-id="${n.id}" data-related-text="${esc(n.content)}" title="${esc(n.content)}">
+    return `<div class="heads-up-item" data-related-id="${n.id}" data-related-text="${escAttr(n.content)}" title="${escAttr(n.content)}">
       <span class="heads-up-date">${esc(n.note_date || '')}</span>
       <span class="heads-up-text">${esc(snippet)}</span>
     </div>`;

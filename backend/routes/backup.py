@@ -13,7 +13,7 @@ async def backup_data(user_id: int = Depends(get_current_user)):
     async with get_db() as db:
         notes_rows = await db.fetch(
             """SELECT id, content_encrypted, note_date, tags,
-                      is_favorited, ai_summary, ai_category, ai_sentiment,
+                      is_favorited, ai_title, ai_summary, ai_category, ai_sentiment,
                       ai_keyphrases, ai_theses, thread_id, mood, created_at
                FROM notes WHERE user_id=$1 ORDER BY created_at""",
             user_id,
@@ -43,6 +43,7 @@ async def backup_data(user_id: int = Depends(get_current_user)):
                     "note_date": r["note_date"],
                     "tags": json.loads(r["tags"]) if r["tags"] else [],
                     "is_favorited": r["is_favorited"],
+                    "ai_title": r["ai_title"] or "",
                     "ai_summary": r["ai_summary"] or "",
                     "ai_category": r["ai_category"] or "",
                     "ai_sentiment": float(r["ai_sentiment"])

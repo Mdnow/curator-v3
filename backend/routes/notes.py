@@ -291,6 +291,12 @@ async def update_note(
             updates.append(f"content_encrypted=${idx}")
             params.append(encrypt(req.content))
             idx += 1
+            updates.append(f"ai_title=${idx}")
+            params.append("")
+            idx += 1
+            updates.append(f"ai_summary=${idx}")
+            params.append("")
+            idx += 1
         if req.tags is not None:
             updates.append(f"tags=${idx}")
             params.append(json.dumps(req.tags))
