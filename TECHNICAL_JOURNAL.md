@@ -756,3 +756,29 @@ curl.exe -s -o resp.json -w "%{http_code}" https://<domain>/api/health
 ### 20.8. Замечания
 - Интеграционные тесты `/api/goals` по-прежнему не покрыты (FUTURE_TASKS.md) — живой прогон на проде закрыл суть проверки, но тест в `test_feat.py` добавить стоит.
 - Переключение Railway CLI между двумя аккаунтами (`691553@bk.ru` ↔ `dnlchk.mn@gmail.com`) — каждый раз `railway login` с выбором аккаунта в браузере; привязка `railway link` живёт по папкам (curator-v3, tiktok-watcher, Temp\opencode\ttw-deploy).
+
+---
+
+## 21. 11.08.2026 — Устойчивость пула к обрывам Neon: health-check + retry в `backend/db.py`
+
+### 21.1. Задача
+Повторяющиеся разрывы соединения с Neon (`ConnectionDoesNotExistError: connection was closed in the middle of operation`, WinError 1225) на нестабильной сети пользователя. Вопрос: есть ли бесплатная альтернатива Neon.
+
+### 21.2. Решение
+Альтернатив **бесплатных** нет (Railway Postgres — разовый $5 credit; Supabase паузится после 7 дней idle; Aiven/Render Postgres — платные). Остаёмся на Neon, но убираем чувствительность к обрывам на уровне пула (`backend/db.py`):
+
+- **Health-check при acquire**: `_healthy_connection()` берёт коннект, проверяет `SELECT 1`, мёртвый отбрасывает; до 4 попыток с exponential backoff (`0.2 * 2^attempt`).
+- **`max_inactive_connection_lifetime=30.0`**: пул сам выбрасывает протухшие idle-коннекты (Neon гасит compute после ~5 мин простоя и рвёт их).
+- **Retry на разрывы**: `_RETRYABLE` (`ConnectionDoesNotExistError`, `InterfaceError`, `ConnectionResetError`, `OSError`) — на эти ошибки соединение безопасно перебрать.
+- `min_size=2 → 1`: не держать лишних долгоживущих коннектов к серверлесс-БД.
+
+Правка попала в коммит `e044519` (11.08 11:19) вместе с журналом 20-й секции; в журнале зафиксирована отдельно здесь.
+
+### 21.3. Проверка
+- `python -m py_compile backend/db.py` — OK.
+- `ruff check backend/db.py` (select F/E9) — 0 замечаний.
+- Интеграционный `test_feat.py` не гонялся: пишет в прод-Neon и жжёт AI-лимит; сеть нестабильна (§16.6, §20.8).
+
+### 21.4. Замечания
+- Health-check `SELECT 1` на каждый `get_db()` — небольшой оверхед (~1 раунд-трип), для масштаба приложения некритично.
+- Если обрыв происходит посреди самой операции (не на acquire), спасёт только ретрай на уровне запроса — на будущее, если симптомы вернутся.
