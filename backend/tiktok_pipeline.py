@@ -123,7 +123,7 @@ async def _download_ytdlp(url: str, dest: str) -> bool:
         return False
 
 
-async def download_video(url: str) -> dict:
+async def download_video(url: str, task_id: int) -> dict:
     os.makedirs(TMP_DIR, exist_ok=True)
     try:
         meta = await fetch_tikwm(url)
@@ -131,7 +131,7 @@ async def download_video(url: str) -> dict:
         meta = None
 
     if meta is not None:
-        dest = os.path.join(TMP_DIR, f"{meta['id'] or 'video'}.mp4")
+        dest = os.path.join(TMP_DIR, f"{task_id}_{meta['id'] or 'video'}.mp4")
         try:
             async with httpx.AsyncClient(timeout=90, follow_redirects=True) as client:
                 r = await client.get(
@@ -151,7 +151,7 @@ async def download_video(url: str) -> dict:
                 return {**meta, "video_path": None}
     else:
         meta = await fetch_ytdlp_meta(url)
-        dest = os.path.join(TMP_DIR, f"{meta['id'] or 'video'}.mp4")
+        dest = os.path.join(TMP_DIR, f"{task_id}_{meta['id'] or 'video'}.mp4")
         ok = await _download_ytdlp(url, dest)
         if not ok:
             return {**meta, "video_path": None}
@@ -167,51 +167,83 @@ GROQ_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 WHISPER_MODEL = "whisper-large-v3-turbo"
 
 
-def _run(cmd: list[str]) -> bool:
+def _run(cmd: list[str]) -> tuple[bool, str]:
     try:
         proc = subprocess.run(
-            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            timeout=120,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
-        return proc.returncode == 0
-    except Exception:
-        return False
+        return proc.returncode == 0, (proc.stderr or "")[-500:]
+    except Exception as e:
+        return False, f"{type(e).__name__}: {str(e)[:200]}"
 
 
-def extract_audio(video_path: str) -> str | None:
-    out = os.path.join(TMP_DIR, "audio.wav")
-    if _run(["ffmpeg", "-y", "-i", video_path, "-vn", "-ac", "1", "-ar", "16000", out]):
-        return out
-    return None
+def extract_audio(video_path: str, out: str) -> tuple[str | None, str]:
+    ok, err = _run(
+        ["ffmpeg", "-y", "-i", video_path, "-vn", "-ac", "1", "-ar", "16000", out]
+    )
+    if ok and os.path.exists(out) and os.path.getsize(out) > 0:
+        return out, ""
+    return None, err or "ffmpeg: звук не извлечён"
 
 
-async def transcribe_audio(audio_path: str) -> str:
+async def transcribe_audio(audio_path: str) -> tuple[str, str]:
     if not GROQ_API_KEY:
-        return ""
+        return "", "нет GROQ_API_KEY"
     try:
         with open(audio_path, "rb") as f:
             content = f.read()
-        async with httpx.AsyncClient(timeout=120) as client:
-            r = await client.post(
-                GROQ_URL,
-                headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
-                files={"file": ("audio.wav", content, "audio/wav")},
-                data={"model": WHISPER_MODEL, "response_format": "json"},
-            )
-            if r.status_code >= 400:
-                print(f"[tiktok] groq -> {r.status_code}: {r.text[:200]}", flush=True)
-                return ""
-            return (r.json().get("text") or "").strip()
     except Exception as e:
-        print(f"[tiktok] groq EXC {type(e).__name__}: {str(e)[:150]}", flush=True)
-        return ""
+        return "", f"не прочитан wav: {type(e).__name__}: {str(e)[:100]}"
+    if len(content) > 25 * 1024 * 1024:
+        return "", "wav больше лимита Groq (25MB)"
+    last_err = ""
+    for attempt in range(3):
+        try:
+            async with httpx.AsyncClient(timeout=120) as client:
+                r = await client.post(
+                    GROQ_URL,
+                    headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+                    files={"file": ("audio.wav", content, "audio/wav")},
+                    data={"model": WHISPER_MODEL, "response_format": "json"},
+                )
+            if r.status_code == 429 or r.status_code >= 500:
+                last_err = f"Groq HTTP {r.status_code}"
+                print(
+                    f"[tiktok] groq {r.status_code}, retry {attempt + 1}",
+                    flush=True,
+                )
+                await asyncio.sleep(3 * (attempt + 1))
+                continue
+            if r.status_code >= 400:
+                print(
+                    f"[tiktok] groq -> {r.status_code}: {r.text[:200]}",
+                    flush=True,
+                )
+                return "", f"Groq HTTP {r.status_code}: {r.text[:150]}"
+            text = (r.json().get("text") or "").strip()
+            if text:
+                return text, ""
+            return "", "нет речи"
+        except Exception as e:
+            last_err = f"{type(e).__name__}: {str(e)[:150]}"
+            print(f"[tiktok] groq EXC {last_err}", flush=True)
+            await asyncio.sleep(2 * (attempt + 1))
+    return "", last_err or "Groq не ответил"
 
 
-async def transcribe_video(video_path: str | None) -> str:
+async def transcribe_video(video_path: str | None, task_id: int) -> tuple[str, str]:
     if not video_path or not os.path.exists(video_path):
-        return ""
-    audio = await asyncio.to_thread(extract_audio, video_path)
+        return "", "видео не скачано"
+    out = os.path.join(TMP_DIR, f"audio_{task_id}.wav")
+    audio, reason = await asyncio.to_thread(extract_audio, video_path, out)
     if not audio:
-        return ""
+        return "", f"извлечь звук не удалось: {reason}"
     return await transcribe_audio(audio)
 
 
@@ -359,13 +391,14 @@ async def process_task(task_id: int, user_id: int) -> None:
 
     try:
         await _set_status(task_id, status="downloading")
-        meta = await download_video(url)
+        meta = await download_video(url, task_id)
         await _set_status(task_id, author=meta.get("author", ""))
 
         await _set_status(task_id, status="transcribing")
         audio_text = ""
+        reason = ""
         if meta.get("video_path"):
-            audio_text = await transcribe_video(meta["video_path"])
+            audio_text, reason = await transcribe_video(meta["video_path"], task_id)
             if audio_text:
                 await _set_status(task_id, status="translating")
                 translation = await translate_transcript(audio_text)
@@ -373,11 +406,23 @@ async def process_task(task_id: int, user_id: int) -> None:
                 translation = ""
         else:
             translation = ""
+            reason = "видео не скачано"
 
-        content = translation or "Речи в видео не было (или расшифровка не удалась)."
+        note_error = ""
+        if translation:
+            content = translation
+        elif reason == "нет речи":
+            content = "В видео не распознана речь (только музыка или шумы)."
+        else:
+            note_error = f"Расшифровка не удалась: {reason or 'неизвестно'}"
+            content = (
+                "Речи в видео не было (расшифровка не удалась: "
+                + (reason or "неизвестно")
+                + ")."
+            )
         content = content[:MAX_CONTENT_LEN]
 
-        await _set_status(task_id, status="saving")
+        await _set_status(task_id, status="saving", error=note_error)
         title = _title_for_note(meta, translation)
         async with get_db() as db:
             note_row = await db.fetchrow(
