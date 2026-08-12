@@ -1,5 +1,6 @@
 import os
 import secrets
+import tempfile
 
 _project_root = os.path.join(os.path.dirname(__file__), "..")
 _env_path = os.path.join(_project_root, ".env")
@@ -26,4 +27,5 @@ DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 ENCRYPTION_KEY = os.getenv("CURATOR_ENCRYPTION_KEY") or secrets.token_hex(32)
 
-TIKTOK_WATCHER_URL = os.getenv("TIKTOK_WATCHER_URL", "").rstrip("/")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+TMP_DIR = os.getenv("TMP_DIR", "") or os.path.join(tempfile.gettempdir(), "tiktok")

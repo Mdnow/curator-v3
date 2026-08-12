@@ -746,42 +746,9 @@
     max-width: 90% !important;
   }
 
-  /* ═══ PATTERNS MOBILE ═══ */
-  #patternsSection {
+  /* ═══ TIKTOK MOBILE ═══ */
+  #tiktokSection {
     padding: 0 16px 80px;
-  }
-
-  .patterns-header {
-    padding: 0 4px;
-  }
-
-  .patterns-title {
-    font-size: var(--font-xl);
-  }
-
-  .patterns-period {
-    padding: 10px 14px;
-    font-size: 16px;
-    border-radius: var(--radius-sm);
-  }
-
-  .patterns-timeline {
-    padding: 16px 0;
-  }
-
-  .patterns-stats {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
-
-  .pattern-stat {
-    padding: 16px;
-    border-radius: var(--radius-md);
-  }
-
-  .patterns-insight {
-    padding: 20px;
-    border-radius: var(--radius-md);
   }
 
   /* ═══ DAILY SUMMARY MOBILE ═══ */

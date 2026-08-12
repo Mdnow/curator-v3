@@ -89,7 +89,7 @@ function loadPageData() {
     case 'daymap': loadDayMap(); break;
     case 'dreams': loadDreams(); break;
     case 'chat': showChat(); break;
-    case 'patterns': loadPatterns(); break;
+    case 'tiktok': loadTikTok(); break;
   }
   renderPageTitle();
 }
@@ -144,7 +144,7 @@ function goToday() { selectedDate = todayStr(); const n = new Date(); calYear = 
 function renderPageTitle() {
   const d = new Date(selectedDate + 'T12:00:00');
   const today = selectedDate === todayStr();
-  const titles = { notes: 'Заметки', goals: 'Цели', tasks: 'Задачи', daymap: 'Карта', dreams: 'Сон', chat: 'Куратор', patterns: 'Паттерны' };
+  const titles = { notes: 'Заметки', goals: 'Цели', tasks: 'Задачи', daymap: 'Карта', dreams: 'Сон', chat: 'Куратор', tiktok: 'Тикток' };
   $('#pageTitle').textContent = titles[currentPage] || '';
   if (currentPage === 'notes' || currentPage === 'tasks') {
     $('#pageSubtitle').textContent = today ? 'Сегодня' : d.getDate() + ' ' + RU_MONTHS_GEN[d.getMonth()] + ', ' + RU_DAYS[d.getDay()];
@@ -159,7 +159,7 @@ function updateMobileHeader() {
   if (!isMobile()) return;
   const d = new Date(selectedDate + 'T12:00:00');
   const today = selectedDate === todayStr();
-  const titles = { notes: 'ЗАМЕТКИ', goals: 'ЦЕЛИ', tasks: 'ЗАДАЧИ', daymap: 'КАРТА', dreams: 'СОН', chat: 'КУРАТОР', patterns: 'ПАТТЕРНЫ' };
+  const titles = { notes: 'ЗАМЕТКИ', goals: 'ЦЕЛИ', tasks: 'ЗАДАЧИ', daymap: 'КАРТА', dreams: 'СОН', chat: 'КУРАТОР', tiktok: 'ТИКТОК' };
   const el = $('#mobileHeaderTitle');
   if (el) el.textContent = titles[currentPage] || '';
   const dateEl = $('#mobileHeaderDate');
@@ -857,53 +857,102 @@ async function searchArchive() {
   } catch (e) { results.innerHTML = '<div class="archive-empty">ошибка поиска</div>'; }
 }
 
-// ═══ Patterns ═══
-async function loadPatterns() {
-  hideAllSections(); $('#patternsSection').style.display = 'block';
-  const days = parseInt($('#patternsPeriod').value) || 30;
-  const timeline = $('#patternsTimeline');
-  const stats = $('#patternsStats');
-  const insight = $('#patternsInsight');
+// ═══ TikTok ═══
+const TIKTOK_STATUS_LABELS = {
+  pending: 'в очереди',
+  downloading: 'скачиваю видео',
+  transcribing: 'расшифровываю речь',
+  translating: 'перевожу на русский',
+  thinking: 'осмысляю',
+  saving: 'сохраняю в заметки',
+  done: 'в зеркале',
+  error: 'ошибка',
+};
+const TIKTOK_BUSY = ['pending','downloading','transcribing','translating','thinking','saving'];
 
-  timeline.innerHTML = '<div class="patterns-loading">загрузка...</div>';
-  stats.innerHTML = '';
-  insight.innerHTML = '';
+function tiktokCardHtml(t) {
+  const st = t.status || 'pending';
+  const cls = st === 'done' ? 'done' : (st === 'error' ? 'error' : 'busy');
+  const label = TIKTOK_STATUS_LABELS[st] || st;
+  let html = `<div class="tiktok-card ${cls}">
+    <div class="tiktok-card-head">
+      <span class="tiktok-card-author">@${esc(t.author || '—')}</span>
+      <span class="tiktok-card-status">${esc(label)}</span>
+    </div>`;
+  if (t.title) html += `<div class="tiktok-card-title">${esc(t.title)}</div>`;
+  if (t.error) html += `<div class="tiktok-card-error">${esc(t.error)}</div>`;
+  html += `<div class="tiktok-card-meta">${t.curator_note_id ? '<span class="in-mirror">в зеркале</span>' : ''}</div></div>`;
+  return html;
+}
 
+async function loadTikTok() {
+  hideAllSections(); $('#tiktokSection').style.display = 'block';
+  const list = $('#tiktokList');
+  const empty = $('#tiktokEmpty');
+  list.innerHTML = '<div class="ai-status active"><div class="ai-dot"></div>загружаю...</div>';
   try {
-    const [timelineData, patternsData] = await Promise.all([
-      api('GET', '/dreams/timeline?days=' + days),
-      api('GET', '/dreams/patterns?days=' + days),
-    ]);
-
-    if (timelineData.length) {
-      let dotsHtml = '<div class="patterns-timeline-inner">';
-      for (const d of timelineData) {
-        const size = Math.max(8, Math.min(32, 8 + d.count * 6));
-        const hue = Math.round(((d.avg_valence + 1) / 2) * 120);
-        const color = `hsl(${hue}, 50%, 50%)`;
-        const date = new Date(d.date + 'T12:00:00');
-        const label = date.getDate() + '.' + (date.getMonth()+1);
-        dotsHtml += `<div class="pattern-dot"><div class="pattern-dot-circle" style="width:${size}px;height:${size}px;background:${color}"></div><div class="pattern-dot-label">${label}</div></div>`;
-      }
-      dotsHtml += '</div>';
-      timeline.innerHTML = dotsHtml;
+    const tasks = await api('GET', '/tiktok?day=' + encodeURIComponent(selectedDate));
+    const busy = tasks.some(t => TIKTOK_BUSY.includes(t.status));
+    if (!tasks.length) {
+      list.innerHTML = ''; empty.style.display = 'block';
     } else {
-      timeline.innerHTML = '<div class="patterns-loading">нет данных за этот период</div>';
+      list.innerHTML = tasks.map(tiktokCardHtml).join('');
+      empty.style.display = 'none';
     }
-
-    const themes = (patternsData.recurring_themes || []).map(t => `<div class="pattern-stat"><div class="pattern-stat-label">тема</div><div class="pattern-stat-value">${esc(t)}</div></div>`).join('');
-    stats.innerHTML = themes;
-
-    if (patternsData.key_insight || patternsData.emotional_arc) {
-      insight.innerHTML = `<div class="patterns-insight"><div class="patterns-insight-title">инсайт недели</div><div class="patterns-insight-content">
-        ${patternsData.emotional_arc ? `<p>${esc(patternsData.emotional_arc)}</p>` : ''}
-        ${patternsData.key_insight ? `<p><strong>${esc(patternsData.key_insight)}</strong></p>` : ''}
-        ${patternsData.suggestion ? `<p style="color:var(--accent)">${esc(patternsData.suggestion)}</p>` : ''}
-      </div></div>`;
-    }
+    if (busy) setTimeout(loadTikTok, 5000);
   } catch (e) {
-    timeline.innerHTML = '<div class="patterns-loading">ошибка загрузки</div>';
+    list.innerHTML = '<div class="tiktok-card error"><div class="tiktok-card-error">' + esc(e.message || 'зеркало дня недоступно') + '</div></div>';
+    empty.style.display = 'none';
   }
+}
+
+let tiktokPollTimer = null;
+
+async function pollTikTok(taskId) {
+  clearTimeout(tiktokPollTimer);
+  try {
+    const t = await api('GET', '/tiktok/' + taskId);
+    const statusEl = $('#tiktokStatusText');
+    if (t.status === 'done') {
+      $('#tiktokStatus').style.display = 'none';
+      toast('перевод сохранён в заметки');
+      await loadTikTok();
+      if (selectedDate === todayStr()) loadNotes();
+      return;
+    }
+    if (t.status === 'error') {
+      $('#tiktokStatus').style.display = 'none';
+      toast('ошибка обработки');
+      await loadTikTok();
+      return;
+    }
+    if (statusEl) statusEl.textContent = (TIKTOK_STATUS_LABELS[t.status] || t.status) + '...';
+    tiktokPollTimer = setTimeout(() => pollTikTok(taskId), 5000);
+  } catch (e) {
+    $('#tiktokStatus').style.display = 'none';
+    toast('зеркало дня не ответило');
+    await loadTikTok();
+  }
+}
+
+async function submitTikTok() {
+  const input = $('#tiktokUrl');
+  const url = input.value.trim();
+  if (!url) return;
+  const btn = $('#tiktokBtn');
+  btn.textContent = '...'; btn.disabled = true;
+  try {
+    const res = await api('POST', '/tiktok/import', { url, note_date: selectedDate });
+    input.value = '';
+    $('#tiktokStatus').style.display = 'flex';
+    $('#tiktokStatusText').textContent = 'в очереди...';
+    await loadTikTok();
+    pollTikTok(res.id);
+  } catch (e) {
+    $('#tiktokStatus').style.display = 'none';
+    toast(e.message || 'ошибка');
+  }
+  btn.textContent = 'СОХРАНИТЬ'; btn.disabled = false;
 }
 
 // ═══ Voice ═══
@@ -939,7 +988,7 @@ function hideAllSections() {
   $('#dayMapSection').style.display = 'none';
   $('#dreamsSection').style.display = 'none';
   $('#chatSection').classList.remove('active');
-  $('#patternsSection').style.display = 'none';
+  $('#tiktokSection').style.display = 'none';
   $('#archivePanel').style.display = 'none';
 }
 
@@ -1201,8 +1250,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const chatBackBtn = $('#chatBackBtn');
   if (chatBackBtn) chatBackBtn.addEventListener('click', () => navigateTo('notes'));
 
-  // Patterns
-  $('#patternsPeriod').addEventListener('change', loadPatterns);
+  // TikTok
+  $('#tiktokBtn').addEventListener('click', submitTikTok);
+  $('#tiktokUrl').addEventListener('keydown', e => { if (e.key === 'Enter') submitTikTok(); });
 
   // User menu
   $('#sidebarUser').addEventListener('click', logout);

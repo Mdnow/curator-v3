@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="/css/dreams.css?v=6">
   <link rel="stylesheet" href="/css/chat.css?v=6">
   <link rel="stylesheet" href="/css/patterns.css?v=6">
+  <link rel="stylesheet" href="/css/tiktok.css?v=1">
   <link rel="stylesheet" href="/css/animations.css?v=6">
   <link rel="stylesheet" href="/css/mobile.css?v=6">
 </head>
@@ -99,9 +100,9 @@
       <span class="mobile-tab-icon">◇</span>
       <span>Куратор</span>
     </button>
-    <button class="mobile-tab" data-page="patterns">
-      <span class="mobile-tab-icon">✦</span>
-      <span>Паттерны</span>
+    <button class="mobile-tab" data-page="tiktok">
+      <span class="mobile-tab-icon">&#9654;</span>
+      <span>Тикток</span>
     </button>
   </nav>
 
@@ -151,8 +152,8 @@
         <button class="nav-btn" data-page="chat">
           <span class="nav-icon">&#9671;</span> Куратор
         </button>
-        <button class="nav-btn" data-page="patterns">
-          <span class="nav-icon">&#10022;</span> Паттерны
+        <button class="nav-btn" data-page="tiktok">
+          <span class="nav-icon">&#9654;</span> Тикток
         </button>
       </nav>
 
@@ -353,19 +354,24 @@
         </div>
       </div>
 
-      <!-- Patterns -->
-      <div id="patternsSection" style="display:none">
-        <div class="patterns-header">
-          <div class="patterns-title">паттерны</div>
-          <select class="patterns-period" id="patternsPeriod">
-            <option value="7">7 дней</option>
-            <option value="14">14 дней</option>
-            <option value="30" selected>30 дней</option>
-          </select>
+      <!-- TikTok -->
+      <div id="tiktokSection" style="display:none">
+        <div class="tiktok-input-wrapper">
+          <div class="tiktok-input-row">
+            <input type="text" class="tiktok-input" id="tiktokUrl" placeholder="вставь ссылку на видео TikTok" autocomplete="off">
+            <button class="btn btn-small" id="tiktokBtn">СОХРАНИТЬ</button>
+          </div>
+          <div class="tiktok-hint">скачаю, расшифрую и сохраню полный русский перевод в заметку этого дня</div>
         </div>
-        <div class="patterns-timeline" id="patternsTimeline"></div>
-        <div class="patterns-stats" id="patternsStats"></div>
-        <div class="patterns-insight" id="patternsInsight"></div>
+        <div class="tiktok-status" id="tiktokStatus" style="display:none">
+          <div class="ai-dot"></div>
+          <span id="tiktokStatusText"></span>
+        </div>
+        <div class="tiktok-list" id="tiktokList"></div>
+        <div class="tiktok-empty" id="tiktokEmpty" style="display:none">
+          <div class="empty-icon">&#9654;</div>
+          <div class="empty-text">в этот день тиктоков нет — кидай ссылку</div>
+        </div>
       </div>
 
     </main>

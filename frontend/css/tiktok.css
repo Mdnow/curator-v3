@@ -1,0 +1,35 @@
+.tiktok-input-wrapper { margin-bottom: var(--space-md); }
+.tiktok-input-row { display: flex; gap: var(--space-sm); }
+.tiktok-input {
+  flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--border);
+  color: var(--text-1); border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-sm); outline: none; transition: border-color 0.15s;
+}
+.tiktok-input:focus { border-color: var(--accent); }
+.tiktok-input::placeholder { color: var(--text-3); }
+.tiktok-hint { font-size: var(--font-xs); color: var(--text-3); margin-top: var(--space-xs); }
+
+.tiktok-status {
+  display: flex; align-items: center; gap: var(--space-sm);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-md); color: var(--text-2); font-size: var(--font-sm);
+}
+
+.tiktok-list { display: flex; flex-direction: column; gap: var(--space-md); }
+
+.tiktok-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 3px solid var(--border); border-radius: var(--radius-md);
+  padding: var(--space-md);
+}
+.tiktok-card.done { border-left-color: var(--success); }
+.tiktok-card.error { border-left-color: var(--danger); }
+.tiktok-card.busy { border-left-color: var(--accent); }
+.tiktok-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-sm); margin-bottom: var(--space-sm); }
+.tiktok-card-author { color: var(--accent); font-size: var(--font-xs); font-weight: 600; }
+.tiktok-card-status { color: var(--text-3); font-size: var(--font-xs); text-transform: capitalize; }
+.tiktok-card-title { font-size: var(--font-md); font-weight: 500; color: var(--text-1); line-height: 1.35; }
+.tiktok-card-error { font-size: var(--font-sm); color: var(--danger); margin-top: var(--space-xs); }
+.tiktok-card-meta { font-size: var(--font-xs); color: var(--text-3); margin-top: var(--space-xs); }
+.tiktok-card-meta .in-mirror { color: var(--success); }
