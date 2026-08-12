@@ -201,8 +201,8 @@ async def init_db():
         await db.execute(
             "ALTER TABLE goals ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active'"
         )
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS day_essences (
+        await db.execute(
+            "CREATE TABLE IF NOT EXISTS day_essences (
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                 date TEXT NOT NULL,
@@ -211,7 +211,24 @@ async def init_db():
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE (user_id, date)
             )
+        ")
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS tiktok_tasks (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                url TEXT NOT NULL,
+                note_date TEXT NOT NULL DEFAULT '',
+                status TEXT DEFAULT 'pending',
+                error TEXT,
+                author TEXT,
+                title TEXT,
+                note_id INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
         """)
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_tiktok_user_date ON tiktok_tasks(user_id, note_date)"
+        )
 
         # Indexes — safe to create repeatedly
         await db.execute(
