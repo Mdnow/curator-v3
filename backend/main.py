@@ -17,6 +17,7 @@ from backend.routes.backup import router as backup_router
 from backend.routes.health import router as health_router
 from backend.routes.insights import router as insights_router
 from backend.routes.goals import router as goals_router
+from backend.routes.tiktok import router as tiktok_router
 
 app = FastAPI(title="Curator v3")
 
@@ -45,6 +46,7 @@ app.include_router(favorites_router)
 app.include_router(backup_router)
 app.include_router(insights_router)
 app.include_router(goals_router)
+app.include_router(tiktok_router)
 app.include_router(health_router)
 
 

@@ -25,3 +25,5 @@ ZEN_URL = "https://opencode.ai/zen/v1/chat/completions"
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 ENCRYPTION_KEY = os.getenv("CURATOR_ENCRYPTION_KEY") or secrets.token_hex(32)
+
+TIKTOK_WATCHER_URL = os.getenv("TIKTOK_WATCHER_URL", "").rstrip("/")

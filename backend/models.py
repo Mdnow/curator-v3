@@ -141,3 +141,13 @@ class ChatReq(BaseModel):
     @classmethod
     def _v_message(cls, v: str) -> str:
         return _check_len(v, "message", 1, 10000)
+
+
+class TikTokImportReq(BaseModel):
+    url: str
+    note_date: str = ""
+
+    @field_validator("url")
+    @classmethod
+    def _v_url(cls, v: str) -> str:
+        return _check_len(v, "url", 8, 2000)
