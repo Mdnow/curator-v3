@@ -881,7 +881,7 @@ function tiktokCardHtml(t) {
     </div>`;
   if (t.title) html += `<div class="tiktok-card-title">${esc(t.title)}</div>`;
   if (t.error) html += `<div class="tiktok-card-error">${esc(t.error)}</div>`;
-  html += `<div class="tiktok-card-meta">${t.curator_note_id ? '<span class="in-mirror">в зеркале</span>' : ''}</div></div>`;
+  html += `<div class="tiktok-card-meta">${t.note_id ? '<span class="in-mirror">в зеркале</span>' : ''}</div></div>`;
   return html;
 }
 
