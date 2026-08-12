@@ -17,6 +17,13 @@
   align-self: flex-start; background: var(--surface); color: var(--text-2);
   border: 1px solid var(--border);
 }
+.chat-copy {
+  display: inline-block; margin-left: 8px; padding: 2px 6px;
+  background: transparent; border: 1px solid transparent; border-radius: var(--radius-xs);
+  color: var(--text-3); font-size: var(--font-sm); line-height: 1;
+  cursor: pointer; vertical-align: middle; transition: all 0.15s;
+}
+.chat-copy:hover { color: var(--accent); border-color: var(--border); background: var(--surface-hover); }
 .chat-auto-saved {
   align-self: flex-start; font-size: var(--font-xs); color: var(--success);
   padding: var(--space-xs) var(--space-md);

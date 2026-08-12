@@ -1,3 +1,4 @@
+import re
 from fastapi import APIRouter, Depends, HTTPException
 from backend.db import get_db
 from backend.auth import get_current_user
@@ -7,6 +8,34 @@ from backend.ai import chat_with_context, CHAT_SYSTEM
 from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/api", tags=["chat"])
+
+_SAVE_RE = re.compile(r"\[SAVE:(.+?)\]", re.DOTALL)
+
+
+async def _save_note(db, user_id: int, text: str) -> dict:
+    """Сохранить текст как заметку «Цитаты» с AI-разметкой."""
+    from backend.ai import analyze_note
+
+    today = datetime.now().date().isoformat()
+    enc = encrypt(text)
+    row = await db.fetchrow(
+        """INSERT INTO notes (user_id, content_encrypted, note_date, tags, ai_category)
+           VALUES ($1,$2,$3,$4,$5) RETURNING id""",
+        user_id,
+        enc,
+        today,
+        "[]",
+        "Цитаты",
+    )
+    ai = await analyze_note(text)
+    if ai.get("summary") or ai.get("category"):
+        await db.execute(
+            "UPDATE notes SET ai_summary=$1, ai_category=$2 WHERE id=$3",
+            ai.get("summary", ""),
+            ai.get("category", "Цитаты"),
+            row["id"],
+        )
+    return {"text": text, "note_id": row["id"], "ai": ai}
 
 
 @router.post("/ai/chat")
@@ -120,6 +149,17 @@ async def ai_chat(req: ChatReq, user_id: int = Depends(get_current_user)):
 
         result = await chat_with_context(history, system=system)
 
+        # Сохранение по явной просьбе пользователя: куратор добавляет в ответ
+        # маркер [SAVE:текст], который превращается в заметку. Маркер из ответа
+        # вырезается, чтобы пользователь его не видел и он не попал в историю.
+        saved = None
+        save_match = _SAVE_RE.search(result)
+        if save_match:
+            thought_text = save_match.group(1).strip()
+            result = _SAVE_RE.sub("", result).strip()
+            if thought_text:
+                saved = await _save_note(db, user_id, thought_text)
+
         await db.execute(
             """INSERT INTO chat_history (user_id, role, content, session_id)
                VALUES ($1,$2,$3,$4)""",
@@ -129,34 +169,19 @@ async def ai_chat(req: ChatReq, user_id: int = Depends(get_current_user)):
             session_id,
         )
 
-        return {"reply": result, "auto_saved": [], "session_id": session_id}
+        return {
+            "reply": result,
+            "auto_saved": [],
+            "saved": saved,
+            "session_id": session_id,
+        }
 
 
 @router.post("/ai/save-thought")
 async def save_thought(req: ChatReq, user_id: int = Depends(get_current_user)):
     async with get_db() as db:
-        today = datetime.now().date().isoformat()
-        enc = encrypt(req.message)
-        row = await db.fetchrow(
-            """INSERT INTO notes (user_id, content_encrypted, note_date, tags, ai_category)
-               VALUES ($1,$2,$3,$4,$5) RETURNING id""",
-            user_id,
-            enc,
-            today,
-            "[]",
-            "Цитаты",
-        )
-        from backend.ai import analyze_note
-
-        ai = await analyze_note(req.message)
-        if ai.get("summary") or ai.get("category"):
-            await db.execute(
-                "UPDATE notes SET ai_summary=$1, ai_category=$2 WHERE id=$3",
-                ai.get("summary", ""),
-                ai.get("category", "Цитаты"),
-                row["id"],
-            )
-        return {"id": row["id"], "ai": ai}
+        saved = await _save_note(db, user_id, req.message)
+        return {"id": saved["note_id"], "ai": saved["ai"]}
 
 
 @router.get("/chat/history")

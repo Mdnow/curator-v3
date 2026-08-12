@@ -761,6 +761,29 @@ function parseChatReply(text) {
   return { text, saveable: null };
 }
 
+function chatMsgHtml(role, text) {
+  const copyBtn = role === 'ai'
+    ? `<button class="chat-copy" data-copy="${escAttr(text)}" title="копировать">&#10697;</button>`
+    : '';
+  return `<div class="chat-msg ${role}">${esc(text).replace(/\n/g, '<br>')}${copyBtn}</div>`;
+}
+
+async function copyChatText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+  toast('скопировано');
+}
+
 async function saveThought(text) {
   try { await api('POST', '/ai/save-thought', { message: text }); toast('мысль сохранена'); } catch (e) { toast('ошибка'); }
 }
@@ -778,8 +801,10 @@ async function sendChat() {
     const loadingEl = $('#chatLoading'); if (loadingEl) loadingEl.remove();
     if (result.session_id) currentSessionId = result.session_id;
     const parsed = parseChatReply(result.reply);
-    let html = `<div class="chat-msg ai">${esc(parsed.text).replace(/\n/g, '<br>')}</div>`;
-    messagesEl.innerHTML += html;
+    messagesEl.innerHTML += chatMsgHtml('ai', parsed.text);
+    if (result.saved && result.saved.text) {
+      messagesEl.innerHTML += `<div class="chat-auto-saved">куратор сохранил это в заметки</div>`;
+    }
   } catch (e) {
     const loadingEl = $('#chatLoading'); if (loadingEl) loadingEl.remove();
     messagesEl.innerHTML += `<div class="chat-msg ai">ошибка соединения</div>`;
@@ -823,7 +848,7 @@ async function openSessionInChat(sessionId) {
     if (!messages.length) { messagesEl.innerHTML = '<div class="chat-msg ai">диалог пуст</div>'; return; }
     messagesEl.innerHTML = messages.map(m => {
       const role = m.role === 'assistant' ? 'ai' : 'user';
-      return `<div class="chat-msg ${role}">${esc(m.content).replace(/\n/g, '<br>')}</div>`;
+      return chatMsgHtml(role, m.content);
     }).join('');
     currentSessionId = sessionId;
   } catch (e) {
@@ -1235,7 +1260,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Chat
   $('#chatSend').addEventListener('click', sendChat);
   $('#chatInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } });
-  $('#chatMessages').addEventListener('click', e => { const btn = e.target.closest('.btn-save-thought'); if (btn) saveThought(btn.dataset.save); });  $('#chatNewBtn').addEventListener('click', newChat);
+  $('#chatMessages').addEventListener('click', e => {
+    const save = e.target.closest('.btn-save-thought');
+    if (save) { saveThought(save.dataset.save); return; }
+    const copy = e.target.closest('.chat-copy');
+    if (copy) copyChatText(copy.dataset.copy);
+  });  $('#chatNewBtn').addEventListener('click', newChat);
   $('#archiveToggle').addEventListener('click', openArchive);
   $('#archiveBack').addEventListener('click', closeArchive);
   $('#archiveClearAll').addEventListener('click', clearAllChat);
