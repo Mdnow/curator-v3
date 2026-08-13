@@ -4,7 +4,7 @@
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 .note-input-wrapper:focus-within {
-  border-color: var(--border-focus); box-shadow: 0 0 40px rgba(99,102,241,0.06);
+  border-color: var(--border-focus); box-shadow: 0 0 40px rgba(168,134,75,0.08);
 }
 .note-input {
   width: 100%; background: transparent; border: none; outline: none;
@@ -63,7 +63,7 @@
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
   padding: var(--space-md); transition: all 0.2s; animation: fadeUp 0.3s ease both;
 }
-.note-card:hover { background: var(--surface-hover); border-color: rgba(255,255,255,0.1); transform: translateY(-1px); }
+.note-card:hover { background: var(--surface-hover); border-color: rgba(168,134,75,0.25); transform: translateY(-1px); }
 .note-title {
   font-size: var(--font-md); font-weight: 500; line-height: 1.4; color: var(--text-1);
   margin-bottom: 4px; cursor: pointer;
@@ -138,8 +138,8 @@
   font-size: var(--font-xs); padding: 4px 10px; border-radius: var(--radius-xs);
   cursor: pointer; transition: all 0.15s;
 }
-.note-action-btn:hover { background: var(--surface-hover); color: var(--text-2); border-color: rgba(255,255,255,0.1); }
-.note-action-save { color: var(--accent); border-color: rgba(99,102,241,0.2); }
+.note-action-btn:hover { background: var(--surface-hover); color: var(--text-2); border-color: rgba(168,134,75,0.25); }
+.note-action-save { color: var(--accent); border-color: rgba(168,134,75,0.3); }
 .note-action-save:hover { background: var(--accent-bg); }
 .note-action-cancel { color: var(--text-3); }
 

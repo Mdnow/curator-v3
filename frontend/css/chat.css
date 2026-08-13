@@ -11,7 +11,7 @@
 }
 .chat-msg.user {
   align-self: flex-end; background: var(--accent-bg); color: var(--text-1);
-  border: 1px solid rgba(99,102,241,0.15);
+  border: 1px solid rgba(168,134,75,0.3);
 }
 .chat-msg.ai {
   align-self: flex-start; background: var(--surface); color: var(--text-2);
@@ -106,7 +106,7 @@
 .selection-toolbar {
   position: fixed; z-index: 999; display: flex; gap: var(--space-xs);
   background: var(--bg-alt); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: var(--space-xs); box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  padding: var(--space-xs); box-shadow: 0 4px 20px rgba(43,39,34,0.15);
 }
 .sel-btn {
   display: flex; align-items: center; gap: var(--space-xs); background: transparent;

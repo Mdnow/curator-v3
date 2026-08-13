@@ -17,7 +17,7 @@
 }
 .task-check:hover { border-color: var(--accent); }
 .task-check.checked { background: var(--accent); border-color: var(--accent); }
-.task-check.checked::after { content: '\2713'; color: #fff; font-size: var(--font-xs); }
+.task-check.checked::after { content: '\2713'; color: #faf6ee; font-size: var(--font-xs); }
 .task-body { flex: 1; min-width: 0; }
 .task-title { font-size: var(--font-md); font-weight: 400; color: var(--text-1); margin-bottom: 2px; }
 .task-card.completed .task-title { text-decoration: line-through; color: var(--text-3); }

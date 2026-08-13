@@ -59,7 +59,7 @@
     right: 0;
     height: calc(var(--safe-top) + var(--header-height));
     padding-top: var(--safe-top);
-    background: rgba(6, 6, 15, 0.85);
+    background: rgba(246,241,231,0.9);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-bottom: 1px solid var(--border);
@@ -115,7 +115,7 @@
     right: 0;
     height: calc(var(--safe-bottom) + var(--bar-height));
     padding-bottom: var(--safe-bottom);
-    background: rgba(6, 6, 15, 0.92);
+    background: rgba(246,241,231,0.95);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-top: 1px solid var(--border);
@@ -172,7 +172,7 @@
   .mobile-drawer-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(43, 39, 34, 0.4);
     z-index: 200;
     opacity: 0;
     pointer-events: none;
@@ -307,7 +307,7 @@
   .cal-day.today { font-weight: 700; }
   .cal-day.selected {
     background: var(--accent);
-    color: #fff;
+    color: #faf6ee;
     border-radius: 50%;
     font-weight: 600;
   }

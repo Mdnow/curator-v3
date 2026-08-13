@@ -88,17 +88,17 @@
 .cal-day:hover { background: var(--surface-hover); }
 .cal-day.other { color: var(--text-3); opacity: 0.3; }
 .cal-day.today { color: var(--accent); font-weight: 600; }
-.cal-day.selected { background: var(--accent); color: #fff; font-weight: 500; }
+.cal-day.selected { background: var(--accent); color: #faf6ee; font-weight: 500; }
 .cal-day.has-notes::after {
   content: ''; position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);
   width: 4px; height: 4px; border-radius: 50%; background: var(--accent);
 }
-.cal-day.selected.has-notes::after { background: #fff; }
+.cal-day.selected.has-notes::after { background: #faf6ee; }
 .cal-day.has-dreams::before {
   content: ''; position: absolute; top: 2px; right: 2px;
   width: 4px; height: 4px; border-radius: 50%; background: var(--warning);
 }
-.cal-day.selected.has-dreams::before { background: #fff; }
+.cal-day.selected.has-dreams::before { background: #faf6ee; }
 
 .main-content { flex: 1; padding: var(--space-xl); display: flex; flex-direction: column; min-width: 0; }
 .page-header { margin-bottom: var(--space-lg); }

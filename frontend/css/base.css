@@ -1,27 +1,27 @@
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-  --bg: #06060f;
-  --bg-alt: #0a0a18;
-  --surface: rgba(255,255,255,0.03);
-  --surface-hover: rgba(255,255,255,0.06);
-  --border: rgba(255,255,255,0.06);
-  --border-focus: rgba(99,102,241,0.4);
+  --bg: #f6f1e7;
+  --bg-alt: #ede4d4;
+  --surface: #faf6ee;
+  --surface-hover: #f0e8da;
+  --border: #d8cdbb;
+  --border-focus: rgba(168,134,75,0.55);
 
-  --text-1: #e8e8f0;
-  --text-2: #8888aa;
-  --text-3: #555570;
+  --text-1: #2b2722;
+  --text-2: #6e675d;
+  --text-3: #9a9286;
 
-  --accent: #6366f1;
-  --accent-bg: rgba(99,102,241,0.12);
-  --accent-hover: rgba(99,102,241,0.22);
+  --accent: #a8864b;
+  --accent-bg: rgba(168,134,75,0.12);
+  --accent-hover: rgba(168,134,75,0.22);
 
-  --success: #34d399;
-  --success-bg: rgba(52,211,153,0.12);
-  --danger: #f87171;
-  --danger-bg: rgba(248,113,113,0.12);
-  --warning: #fbbf24;
-  --warning-bg: rgba(251,191,36,0.12);
+  --success: #5b7a5e;
+  --success-bg: rgba(91,122,94,0.12);
+  --danger: #a05a4e;
+  --danger-bg: rgba(160,90,78,0.12);
+  --warning: #b08d57;
+  --warning-bg: rgba(176,141,87,0.12);
 
   --radius-xs: 6px;
   --radius-sm: 10px;
@@ -41,10 +41,10 @@
   --font-xl: 1.3rem;
 }
 
-html { font-size: 15px; -webkit-font-smoothing: antialiased; }
+html { font-size: 16px; -webkit-font-smoothing: antialiased; }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Golos Text', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   background: var(--bg);
   color: var(--text-1);
   min-height: 100vh;
@@ -52,7 +52,13 @@ body {
   line-height: 1.5;
 }
 
-::selection { background: var(--accent); color: #fff; }
+h1, h2, h3 {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+::selection { background: var(--accent); color: #faf6ee; }
 
 input, textarea, select, button { font-family: inherit; }
 
@@ -62,7 +68,7 @@ input, textarea, select, button { font-family: inherit; }
 
 .btn {
   background: var(--accent-bg);
-  border: 1px solid rgba(99,102,241,0.15);
+  border: 1px solid rgba(168,134,75,0.3);
   color: var(--accent);
   font-size: var(--font-sm);
   font-weight: 500;
