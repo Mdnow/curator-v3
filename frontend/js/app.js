@@ -5,7 +5,6 @@
 
 const API = '/api';
 const RU_MONTHS = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
-const RU_MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 const RU_DAYS = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
 
 // ═══ State ═══
@@ -28,6 +27,13 @@ function todayStr() {
 }
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 function escAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
+
+function fmtDate(iso) {
+  if (!iso) return '';
+  const p = String(iso).slice(0, 10).split('-');
+  if (p.length !== 3) return String(iso);
+  return p[2] + '.' + p[1] + '.' + p[0];
+}
 function toast(msg) { const el = $('#toast'); el.textContent = msg; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2000); }
 function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 
@@ -147,9 +153,9 @@ function renderPageTitle() {
   const titles = { notes: 'Заметки', goals: 'Цели', tasks: 'Задачи', daymap: 'Карта', dreams: 'Сон', chat: 'Куратор', tiktok: 'Тикток' };
   $('#pageTitle').textContent = titles[currentPage] || '';
   if (currentPage === 'notes' || currentPage === 'tasks') {
-    $('#pageSubtitle').textContent = today ? 'Сегодня' : d.getDate() + ' ' + RU_MONTHS_GEN[d.getMonth()] + ', ' + RU_DAYS[d.getDay()];
+    $('#pageSubtitle').textContent = today ? 'Сегодня' : fmtDate(selectedDate) + ', ' + RU_DAYS[d.getDay()];
   } else {
-    $('#pageSubtitle').textContent = today ? RU_DAYS[d.getDay()] : d.getDate() + ' ' + RU_MONTHS_GEN[d.getMonth()];
+    $('#pageSubtitle').textContent = today ? RU_DAYS[d.getDay()] : fmtDate(selectedDate);
   }
   $('#btnToday').classList.toggle('active', today);
   updateMobileHeader();
@@ -164,7 +170,7 @@ function updateMobileHeader() {
   if (el) el.textContent = titles[currentPage] || '';
   const dateEl = $('#mobileHeaderDate');
   if (dateEl) {
-    dateEl.textContent = today ? 'Сегодня' : d.getDate() + ' ' + RU_MONTHS_GEN[d.getMonth()];
+    dateEl.textContent = today ? 'Сегодня' : fmtDate(selectedDate);
   }
 }
 
@@ -275,7 +281,7 @@ function showHeadsUp(related) {
   list.innerHTML = related.map(n => {
     const snippet = (n.ai_summary || n.content || '').slice(0, 110);
     return `<div class="heads-up-item" data-related-id="${n.id}" data-related-text="${escAttr(n.content)}" title="${escAttr(n.content)}">
-      <span class="heads-up-date">${esc(n.note_date || '')}</span>
+      <span class="heads-up-date">${esc(fmtDate(n.note_date))}</span>
       <span class="heads-up-text">${esc(snippet)}</span>
     </div>`;
   }).join('');
@@ -461,7 +467,7 @@ function formatDueDate(date, time) {
   const diff = Math.floor((d - new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())) / 86400000);
   let dateStr = '';
   if (diff === 0) dateStr = 'сегодня'; else if (diff === 1) dateStr = 'завтра'; else if (diff === -1) dateStr = 'вчера';
-  else dateStr = d.getDate() + ' ' + RU_MONTHS_GEN[d.getMonth()];
+  else dateStr = fmtDate(date);
   return time ? dateStr + ', ' + time : dateStr;
 }
 
@@ -509,7 +515,7 @@ function renderGoal(goal, maxCount = 1, isArchived = false) {
   const ev = (goal.evidence || []).map(e =>
     `<button class="goal-quote" data-goal-date="${esc(e.note_date || '')}">
        <span class="goal-quote-text">«${esc(e.quote)}»</span>
-       ${e.note_date ? `<span class="goal-quote-date">${esc(e.note_date)}</span>` : ''}
+       ${e.note_date ? `<span class="goal-quote-date">${esc(fmtDate(e.note_date))}</span>` : ''}
      </button>`
   ).join('');
   const pct = maxCount > 0 ? Math.round((goal.source_count / maxCount) * 100) : 0;
@@ -835,8 +841,8 @@ async function loadArchiveSessions() {
 
 function formatArchiveDate(iso) {
   const d = new Date(iso);
-  const months = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
-  return `${d.getDate()} ${months[d.getMonth()]}, ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 async function openSessionInChat(sessionId) {
