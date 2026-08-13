@@ -307,21 +307,23 @@ async def _call(
         return None
 
 
-async def translate_transcript(audio_text: str) -> str:
+async def translate_transcript(audio_text: str) -> tuple[str, str]:
     text = (audio_text or "").strip()
     if not text:
-        return ""
+        return "", "пустой транскрипт"
     msgs = [
         {"role": "system", "content": TRANSLATE_PROMPT},
         {"role": "user", "content": text[:12000]},
     ]
+    last_err = ""
     async with httpx.AsyncClient(timeout=120) as client:
         if GROQ_API_KEY:
             content = await _call(
                 client, GROQ_LLM_URL, GROQ_API_KEY, GROQ_LLM_MODEL, msgs
             )
             if content:
-                return content.strip()
+                return content.strip(), ""
+            last_err = "Groq LLM не ответил"
             print("[tiktok] groq llm failed, fallback to openrouter", flush=True)
         if OPENROUTER_API_KEY:
             for _ in range(2):
@@ -335,8 +337,9 @@ async def translate_transcript(audio_text: str) -> str:
                         {"reasoning": {"exclude": True}},
                     )
                     if content:
-                        return content.strip()
-    return ""
+                        return content.strip(), ""
+                    last_err = "OpenRouter free не ответил"
+    return "", last_err or "перевод не удался"
 
 
 # --- фоновый воркер ---
@@ -401,11 +404,11 @@ async def process_task(task_id: int, user_id: int) -> None:
             audio_text, reason = await transcribe_video(meta["video_path"], task_id)
             if audio_text:
                 await _set_status(task_id, status="translating")
-                translation = await translate_transcript(audio_text)
+                translation, t_reason = await translate_transcript(audio_text)
             else:
-                translation = ""
+                translation, t_reason = "", ""
         else:
-            translation = ""
+            translation, t_reason = "", ""
             reason = "видео не скачано"
 
         note_error = ""
@@ -413,6 +416,11 @@ async def process_task(task_id: int, user_id: int) -> None:
             content = translation
         elif reason == "нет речи":
             content = "В видео не распознана речь (только музыка или шумы)."
+        elif audio_text:
+            note_error = (
+                f"Речь распознана, но перевод не удался: {t_reason or 'неизвестно'}"
+            )
+            content = audio_text
         else:
             note_error = f"Расшифровка не удалась: {reason or 'неизвестно'}"
             content = (
