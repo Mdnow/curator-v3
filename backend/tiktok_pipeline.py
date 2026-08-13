@@ -6,9 +6,16 @@ import subprocess
 
 import httpx
 
-from backend.config import GROQ_API_KEY, OPENROUTER_API_KEY, TMP_DIR
+from backend.config import (
+    GROQ_API_KEY,
+    OPENROUTER_API_KEY,
+    TMP_DIR,
+    ZEN_API_KEY,
+    ZEN_URL,
+)
 from backend.crypto import encrypt
 from backend.db import get_db, get_pool
+from backend.ai import ZEN_MODELS
 
 # --- скачивание (из tiktok-watcher, ADR-0008/0009) ---
 
@@ -324,7 +331,14 @@ async def translate_transcript(audio_text: str) -> tuple[str, str]:
             if content:
                 return content.strip(), ""
             last_err = "Groq LLM не ответил"
-            print("[tiktok] groq llm failed, fallback to openrouter", flush=True)
+            print("[tiktok] groq llm failed, fallback to zen", flush=True)
+        if ZEN_API_KEY:
+            for model in ZEN_MODELS:
+                content = await _call(client, ZEN_URL, ZEN_API_KEY, model, msgs)
+                if content:
+                    return content.strip(), ""
+                last_err = "Zen не ответил"
+            print("[tiktok] zen failed, fallback to openrouter", flush=True)
         if OPENROUTER_API_KEY:
             for _ in range(2):
                 for model in FREE_MODELS:
