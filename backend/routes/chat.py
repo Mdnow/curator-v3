@@ -1,5 +1,5 @@
 import re
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from backend.db import get_db
 from backend.auth import get_current_user
 from backend.crypto import encrypt, decrypt
@@ -12,10 +12,15 @@ router = APIRouter(prefix="/api", tags=["chat"])
 _SAVE_RE = re.compile(r"\[SAVE:(.+?)\]", re.DOTALL)
 
 
-async def _save_note(db, user_id: int, text: str) -> dict:
-    """Сохранить текст как заметку «Цитаты» с AI-разметкой."""
-    from backend.ai import analyze_note
+async def _save_note(
+    db, user_id: int, text: str, background: BackgroundTasks | None = None
+) -> dict:
+    """Сохранить текст как заметку «Цитаты».
 
+    AI-разметку уводим в фон (как у обычных заметок): второй последовательный
+    AI-вызов внутри запроса раздувал ответ за таймаут Render, и клиент видел
+    «ошибку соединения». Фоновая задача пишет и ai_title.
+    """
     today = datetime.now().date().isoformat()
     enc = encrypt(text)
     row = await db.fetchrow(
@@ -27,6 +32,14 @@ async def _save_note(db, user_id: int, text: str) -> dict:
         "[]",
         "Цитаты",
     )
+    if background is not None:
+        from backend.routes.notes import _analyze_in_background
+
+        background.add_task(_analyze_in_background, row["id"], text, user_id)
+        return {"text": text, "note_id": row["id"], "ai": None}
+
+    from backend.ai import analyze_note
+
     ai = await analyze_note(text)
     if ai.get("summary") or ai.get("category"):
         await db.execute(
@@ -39,7 +52,9 @@ async def _save_note(db, user_id: int, text: str) -> dict:
 
 
 @router.post("/ai/chat")
-async def ai_chat(req: ChatReq, user_id: int = Depends(get_current_user)):
+async def ai_chat(
+    req: ChatReq, background: BackgroundTasks, user_id: int = Depends(get_current_user)
+):
     async with get_db() as db:
         if req.session_id is not None:
             owner = await db.fetchrow(
@@ -158,7 +173,7 @@ async def ai_chat(req: ChatReq, user_id: int = Depends(get_current_user)):
             thought_text = save_match.group(1).strip()
             result = _SAVE_RE.sub("", result).strip()
             if thought_text:
-                saved = await _save_note(db, user_id, thought_text)
+                saved = await _save_note(db, user_id, thought_text, background)
 
         await db.execute(
             """INSERT INTO chat_history (user_id, role, content, session_id)
@@ -178,9 +193,11 @@ async def ai_chat(req: ChatReq, user_id: int = Depends(get_current_user)):
 
 
 @router.post("/ai/save-thought")
-async def save_thought(req: ChatReq, user_id: int = Depends(get_current_user)):
+async def save_thought(
+    req: ChatReq, background: BackgroundTasks, user_id: int = Depends(get_current_user)
+):
     async with get_db() as db:
-        saved = await _save_note(db, user_id, req.message)
+        saved = await _save_note(db, user_id, req.message, background)
         return {"id": saved["note_id"], "ai": saved["ai"]}
 
 

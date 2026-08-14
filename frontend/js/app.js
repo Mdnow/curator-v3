@@ -247,7 +247,7 @@ function noteTitle(note) {
 function noteSummary(note) {
   if (note.ai_summary && note.ai_summary.trim()) return note.ai_summary.trim().slice(0, 200);
   const lines = (note.content || '').split('\n').map(l => l.trim()).filter(Boolean);
-  const rest = lines.slice(1).join(' ') || lines[0] || '';
+  const rest = lines.slice(1).join(' ');
   return rest.slice(0, 200);
 }
 

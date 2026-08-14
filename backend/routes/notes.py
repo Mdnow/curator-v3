@@ -262,7 +262,7 @@ async def reanalyze_notes(
     async with get_db() as db:
         rows = await db.fetch(
             """SELECT id FROM notes
-               WHERE user_id=$1 AND (ai_category IS NULL OR ai_category='' OR ai_category='без категории')
+               WHERE user_id=$1 AND (ai_title IS NULL OR ai_title='' OR ai_summary IS NULL OR ai_summary='')
                ORDER BY created_at DESC LIMIT 200""",
             user_id,
         )
