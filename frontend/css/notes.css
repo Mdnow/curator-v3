@@ -170,6 +170,19 @@
   font-size: var(--font-xs); color: var(--accent); background: var(--accent-bg);
   padding: 4px 10px; border-radius: var(--radius-xs);
 }
+.summary-tag.theme-btn {
+  cursor: pointer; border: none; font: inherit;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.summary-tag.theme-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  background: var(--accent-hover);
+}
+.summary-tag.theme-btn:active { transform: translateY(0); }
+.summary-theme-hint {
+  font-size: var(--font-xs); color: var(--text-3); margin-top: var(--space-sm);
+}
 .summary-insight {
   padding: var(--space-md); background: var(--accent-bg);
   border-radius: var(--radius-sm); line-height: 1.7; color: var(--text-2);

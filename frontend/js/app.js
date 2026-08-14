@@ -411,7 +411,8 @@ async function dailySummary() {
     if (patterns.recurring_themes && patterns.recurring_themes.length) {
       summaryHtml += `<div class="summary-section">
         <div class="summary-label">повторяющиеся темы</div>
-        <div class="summary-tags">${patterns.recurring_themes.map(t => `<span class="summary-tag">${esc(t)}</span>`).join('')}</div>
+        <div class="summary-tags">${patterns.recurring_themes.map(t => `<button class="summary-tag theme-btn" data-theme="${escAttr(t)}" title="обсудить с куратором">${esc(t)}</button>`).join('')}</div>
+        <div class="summary-theme-hint">нажми на тему — куратор поможет увидеть паттерн и связи</div>
       </div>`;
     }
 
@@ -421,6 +422,13 @@ async function dailySummary() {
   } catch (e) {
     el.innerHTML = '<div class="patterns-loading">ошибка загрузки</div>';
   }
+}
+
+function discussTheme(theme) {
+  const msg = 'Тема «' + theme + '» снова повторилась в моих заметках. Почему она вообще образовалась? Помоги увидеть паттерн и связи между заметками — какие мысли и события её питают, к чему она ведёт.';
+  $('#chatInput').value = msg;
+  navigateTo('chat');
+  sendChat();
 }
 
 // ═══ Tasks ═══
@@ -1098,6 +1106,10 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#btnBackup').addEventListener('click', downloadBackup);
   $('#btnDailySummary').addEventListener('click', dailySummary);
   $('#btnReanalyze').addEventListener('click', reanalyzeNotes);
+  $('#dailySummary').addEventListener('click', e => {
+    const themeBtn = e.target.closest('[data-theme]');
+    if (themeBtn) discussTheme(themeBtn.dataset.theme);
+  });
 
   // Mobile drawer buttons
   const mobileBackupBtn = $('.btn-backup-mobile');
