@@ -545,7 +545,18 @@ async function generateGoals() {
     let reloads = 0;
     const t = setInterval(async () => {
       reloads++;
+      if (currentPage !== 'goals') {
+        clearInterval(t);
+        statusEl.style.display = 'none';
+        return;
+      }
       try { await loadGoals(); } catch (e) {}
+      if (currentPage !== 'goals') {
+        $('#goalsSection').style.display = 'none';
+        clearInterval(t);
+        statusEl.style.display = 'none';
+        return;
+      }
       if (reloads >= 20) { clearInterval(t); statusEl.style.display = 'none'; }
     }, 4000);
     setTimeout(() => { clearInterval(t); statusEl.style.display = 'none'; }, 90000);
