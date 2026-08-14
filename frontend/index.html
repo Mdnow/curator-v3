@@ -9,7 +9,7 @@
   <title>КУРАТОР v3</title>
   <link rel="stylesheet" href="/css/base.css?v=6">
   <link rel="stylesheet" href="/css/layout.css?v=6">
-  <link rel="stylesheet" href="/css/notes.css?v=7">
+  <link rel="stylesheet" href="/css/notes.css?v=8">
   <link rel="stylesheet" href="/css/tasks.css?v=6">
   <link rel="stylesheet" href="/css/goals.css?v=7">
   <link rel="stylesheet" href="/css/chat.css?v=7">
@@ -301,6 +301,23 @@
     </button>
   </div>
 
-  <script src="/js/app.js?v=12"></script>
+  <div class="note-modal" id="noteModal" hidden>
+    <div class="note-modal-backdrop" data-close-note-modal></div>
+    <div class="note-modal-card">
+      <div class="note-modal-header">
+        <div class="note-modal-heading">
+          <div class="note-modal-title" id="noteModalTitle"></div>
+          <div class="note-modal-date" id="noteModalDate"></div>
+        </div>
+        <button class="note-modal-close" data-close-note-modal title="закрыть">&#10005;</button>
+      </div>
+      <div class="note-modal-body" id="noteModalBody"></div>
+      <div class="note-modal-footer">
+        <button class="btn btn-primary" id="noteModalOpenBtn">открыть в заметках</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js?v=13"></script>
 </body>
 </html>

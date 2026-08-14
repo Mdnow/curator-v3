@@ -12,6 +12,17 @@ router = APIRouter(prefix="/api", tags=["chat"])
 _SAVE_RE = re.compile(r"\[SAVE:(.+?)\]", re.DOTALL)
 
 
+def _extract_note_refs(text: str) -> list[int]:
+    """Уникальные id заметок из маркеров [NOTE:id] в ответе куратора."""
+    ids = []
+    for m in re.finditer(r"\[NOTE:(\d+)\]", text, re.IGNORECASE):
+        try:
+            ids.append(int(m.group(1)))
+        except ValueError:
+            continue
+    return list(dict.fromkeys(ids))
+
+
 async def _save_note(
     db, user_id: int, text: str, background: BackgroundTasks | None = None
 ) -> dict:
@@ -105,7 +116,7 @@ async def ai_chat(
             history.append({"role": r["role"], "content": r["content"]})
 
         note_rows = await db.fetch(
-            """SELECT content_encrypted, note_date, is_favorited, ai_summary,
+            """SELECT id, content_encrypted, note_date, is_favorited, ai_summary,
                       ai_category
                FROM notes WHERE user_id=$1
                ORDER BY created_at DESC LIMIT 30""",
@@ -117,7 +128,7 @@ async def ai_chat(
         for r in note_rows:
             try:
                 text = decrypt(r["content_encrypted"])
-                notes.append(f"[{r['note_date']}] {text}")
+                notes.append(f"[id={r['id']}] [{r['note_date']}] {text}")
                 if r["is_favorited"]:
                     fav_notes.append(text)
                 cat = (r["ai_category"] or "").strip()
@@ -164,6 +175,36 @@ async def ai_chat(
 
         result = await chat_with_context(history, system=system)
 
+        # Ссылки на заметки: куратор помечает упоминания маркером [NOTE:id].
+        # Маркеры вырезаем из текста, по id подтягиваем данные заметок, чтобы
+        # фронт сделал их кликабельными (пользователь читает полный текст).
+        note_ref_ids = _extract_note_refs(result)
+        result = re.sub(r"\[NOTE:\d+\]", "", result, flags=re.IGNORECASE).strip()
+        note_refs = []
+        if note_ref_ids:
+            rows = await db.fetch(
+                """SELECT id, note_date, content_encrypted, ai_title, ai_summary,
+                          ai_category
+                   FROM notes WHERE id = ANY($1::int[]) AND user_id=$2""",
+                note_ref_ids,
+                user_id,
+            )
+            for r in rows:
+                try:
+                    content = decrypt(r["content_encrypted"])
+                except Exception:
+                    content = ""
+                note_refs.append(
+                    {
+                        "id": r["id"],
+                        "note_date": r["note_date"] or "",
+                        "content": content,
+                        "ai_title": r["ai_title"] or "",
+                        "ai_summary": r["ai_summary"] or "",
+                        "ai_category": r["ai_category"] or "",
+                    }
+                )
+
         # Сохранение по явной просьбе пользователя: куратор добавляет в ответ
         # маркер [SAVE:текст], который превращается в заметку. Маркер из ответа
         # вырезается, чтобы пользователь его не видел и он не попал в историю.
@@ -188,6 +229,7 @@ async def ai_chat(
             "reply": result,
             "auto_saved": [],
             "saved": saved,
+            "note_refs": note_refs,
             "session_id": session_id,
         }
 

@@ -28,6 +28,27 @@
   align-self: flex-start; font-size: var(--font-xs); color: var(--success);
   padding: var(--space-xs) var(--space-md);
 }
+
+.chat-note-refs {
+  align-self: flex-start; display: flex; flex-direction: column; gap: var(--space-xs);
+  width: 100%; max-width: 80%; margin-top: calc(-1 * var(--space-sm));
+}
+.chat-note-refs-label {
+  font-size: var(--font-xs); color: var(--text-3); letter-spacing: 0.03em;
+}
+.chat-note-ref {
+  display: flex; align-items: baseline; gap: var(--space-sm);
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 2px solid var(--accent); border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md); cursor: pointer;
+  text-align: left; transition: background 0.15s, border-color 0.15s;
+}
+.chat-note-ref:hover { background: var(--accent-bg); border-color: var(--accent-hover); }
+.chat-note-ref-title {
+  color: var(--text-1); font-size: var(--font-md); font-weight: 400; flex: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.chat-note-ref-date { font-size: var(--font-xs); color: var(--text-3); white-space: nowrap; }
 .chat-save-prompt {
   display: flex; align-items: center; gap: var(--space-sm); align-self: flex-start;
   padding: var(--space-xs) var(--space-md);

@@ -637,6 +637,25 @@ async function saveThought(text) {
   try { await api('POST', '/ai/save-thought', { message: text }); toast('мысль сохранена'); } catch (e) { toast('ошибка'); }
 }
 
+function openNoteModal(note) {
+  $('#noteModalTitle').textContent = note.title || 'заметка';
+  $('#noteModalDate').textContent = note.date ? fmtDate(note.date) : '';
+  $('#noteModalBody').textContent = note.content || '';
+  $('#noteModalOpenBtn').dataset.noteDate = note.date || '';
+  $('#noteModal').hidden = false;
+}
+
+function closeNoteModal() {
+  $('#noteModal').hidden = true;
+}
+
+function openNoteInNotes(date) {
+  closeNoteModal();
+  if (date) { selectedDate = date; renderCalendar(); renderPageTitle(); }
+  navigateTo('notes');
+  loadPageData();
+}
+
 async function sendChat() {
   const input = $('#chatInput'); const msg = input.value.trim();
   if (!msg) return;
@@ -653,6 +672,15 @@ async function sendChat() {
     messagesEl.innerHTML += chatMsgHtml('ai', parsed.text);
     if (result.saved && result.saved.text) {
       messagesEl.innerHTML += `<div class="chat-auto-saved">куратор сохранил это в заметки</div>`;
+    }
+    if (result.note_refs && result.note_refs.length) {
+      const refs = result.note_refs.map(n =>
+        `<button class="chat-note-ref" data-note-id="${n.id}" data-note-content="${escAttr(n.content)}" data-note-date="${escAttr(n.note_date)}" data-note-title="${escAttr(noteTitle(n))}">` +
+          `<span class="chat-note-ref-title">${esc(noteTitle(n))}</span>` +
+          `<span class="chat-note-ref-date">${esc(fmtDate(n.note_date))}</span>` +
+        `</button>`
+      ).join('');
+      messagesEl.innerHTML += `<div class="chat-note-refs"><div class="chat-note-refs-label">куратор ссылается на заметки — нажми, чтобы прочитать полностью</div>${refs}</div>`;
     }
   } catch (e) {
     const loadingEl = $('#chatLoading'); if (loadingEl) loadingEl.remove();
@@ -1099,7 +1127,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (save) { saveThought(save.dataset.save); return; }
     const copy = e.target.closest('.chat-copy');
     if (copy) copyChatText(copy.dataset.copy);
+    const ref = e.target.closest('.chat-note-ref');
+    if (ref) openNoteModal({ id: ref.dataset.noteId, content: ref.dataset.noteContent, date: ref.dataset.noteDate, title: ref.dataset.noteTitle });
   });  $('#chatNewBtn').addEventListener('click', newChat);
+  const noteModal = $('#noteModal');
+  if (noteModal) {
+    $$('[data-close-note-modal]').forEach(el => el.addEventListener('click', closeNoteModal));
+    const noteModalOpenBtn = $('#noteModalOpenBtn');
+    if (noteModalOpenBtn) noteModalOpenBtn.addEventListener('click', () => openNoteInNotes(noteModalOpenBtn.dataset.noteDate));
+  }
   $('#archiveToggle').addEventListener('click', openArchive);
   $('#archiveBack').addEventListener('click', closeArchive);
   $('#archiveClearAll').addEventListener('click', clearAllChat);

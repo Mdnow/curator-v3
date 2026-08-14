@@ -191,3 +191,45 @@
 .summary-insight p { margin-bottom: var(--space-sm); }
 .summary-insight p:last-child { margin-bottom: 0; }
 .summary-suggestion { color: var(--accent); }
+
+.note-modal {
+  position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center;
+  justify-content: center; padding: var(--space-md);
+}
+.note-modal-backdrop {
+  position: absolute; inset: 0; background: rgba(0,0,0,0.5);
+  animation: fadeUp 0.15s ease;
+}
+.note-modal-card {
+  position: relative; width: 100%; max-width: 560px; max-height: 80vh;
+  display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-md); box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+  animation: fadeUp 0.2s ease; overflow: hidden;
+}
+.note-modal-header {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-sm);
+  padding: var(--space-md); border-bottom: 1px solid var(--border);
+}
+.note-modal-heading { min-width: 0; }
+.note-modal-title {
+  color: var(--text-1); font-size: var(--font-lg); font-weight: 400;
+  line-height: 1.4; word-break: break-word;
+}
+.note-modal-date { font-size: var(--font-xs); color: var(--text-3); margin-top: 2px; }
+.note-modal-close {
+  flex-shrink: 0; background: transparent; border: none; color: var(--text-3);
+  font-size: var(--font-md); cursor: pointer; padding: 4px 8px; border-radius: var(--radius-xs);
+  transition: all 0.15s;
+}
+.note-modal-close:hover { color: var(--accent); background: var(--accent-bg); }
+.note-modal-body {
+  flex: 1; overflow-y: auto; padding: var(--space-md);
+  color: var(--text-2); font-size: var(--font-md); font-weight: 300;
+  line-height: 1.7; white-space: pre-wrap; word-break: break-word;
+}
+.note-modal-footer {
+  padding: var(--space-sm) var(--space-md); border-top: 1px solid var(--border);
+  display: flex; justify-content: flex-end;
+}
+.note-modal-footer .btn { padding: 8px 20px; }
