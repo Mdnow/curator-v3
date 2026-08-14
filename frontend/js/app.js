@@ -13,8 +13,6 @@ let currentUser = null;
 let selectedDate = todayStr();
 let calYear, calMonth;
 let currentPage = 'notes';
-let dreamMode = 'night';
-let dreamQuality = 0;
 let isMobile = () => window.innerWidth <= 800;
 let drawerOpen = false;
 
@@ -92,8 +90,6 @@ function loadPageData() {
     case 'notes': loadNotes(); break;
     case 'tasks': loadTasks(); break;
     case 'goals': loadGoals(); break;
-    case 'daymap': loadDayMap(); break;
-    case 'dreams': loadDreams(); break;
     case 'chat': showChat(); break;
     case 'tiktok': loadTikTok(); break;
   }
@@ -150,7 +146,7 @@ function goToday() { selectedDate = todayStr(); const n = new Date(); calYear = 
 function renderPageTitle() {
   const d = new Date(selectedDate + 'T12:00:00');
   const today = selectedDate === todayStr();
-  const titles = { notes: 'Заметки', goals: 'Цели', tasks: 'Задачи', daymap: 'Карта', dreams: 'Сон', chat: 'Куратор', tiktok: 'Тикток' };
+  const titles = { notes: 'Заметки', goals: 'Цели', tasks: 'Задачи', chat: 'Куратор', tiktok: 'Тикток' };
   $('#pageTitle').textContent = titles[currentPage] || '';
   if (currentPage === 'notes' || currentPage === 'tasks') {
     $('#pageSubtitle').textContent = today ? 'Сегодня' : fmtDate(selectedDate) + ', ' + RU_DAYS[d.getDay()];
@@ -165,7 +161,7 @@ function updateMobileHeader() {
   if (!isMobile()) return;
   const d = new Date(selectedDate + 'T12:00:00');
   const today = selectedDate === todayStr();
-  const titles = { notes: 'ЗАМЕТКИ', goals: 'ЦЕЛИ', tasks: 'ЗАДАЧИ', daymap: 'КАРТА', dreams: 'СОН', chat: 'КУРАТОР', tiktok: 'ТИКТОК' };
+  const titles = { notes: 'ЗАМЕТКИ', goals: 'ЦЕЛИ', tasks: 'ЗАДАЧИ', chat: 'КУРАТОР', tiktok: 'ТИКТОК' };
   const el = $('#mobileHeaderTitle');
   if (el) el.textContent = titles[currentPage] || '';
   const dateEl = $('#mobileHeaderDate');
@@ -572,177 +568,6 @@ async function deleteGoal(id) {
   try { await api('DELETE', '/goals/' + id); toast('удалено'); await loadGoals(); } catch (e) { toast('ошибка'); }
 }
 
-// ═══ Day Map ═══
-async function loadDayMap() {
-  hideAllSections(); $('#dayMapSection').style.display = 'block';
-  const bubblesEl = $('#daymapBubbles');
-  const phrasesEl = $('#daymapPhrases');
-  const threadsEl = $('#daymapThreads');
-  const essenceEl = $('#daymapEssence');
-  const emptyEl = $('#daymapEmpty');
-  const notesEl = $('#daymapNotes');
-  bubblesEl.innerHTML = '<div class="patterns-loading">собираю карту...</div>';
-  phrasesEl.innerHTML = ''; threadsEl.innerHTML = '';
-  essenceEl.style.display = 'none'; notesEl.style.display = 'none';
-
-  try {
-    const data = await api('GET', '/insights/day-map?date=' + selectedDate);
-    if (!data.total) {
-      bubblesEl.innerHTML = '';
-      emptyEl.style.display = 'block';
-      return;
-    }
-    emptyEl.style.display = 'none';
-
-    if (data.essence) {
-      essenceEl.style.display = 'block';
-      essenceEl.innerHTML = `<span class="daymap-essence-mark">&#9678;</span> <span>${esc(data.essence)}</span>`;
-    }
-
-    bubblesEl.innerHTML = renderBubbles(data);
-    phrasesEl.innerHTML = data.phrases.length
-      ? data.phrases.map(p => `<div class="daymap-phrase"><span class="daymap-phrase-text">${esc(p.phrase)}</span><span class="daymap-phrase-count">${p.count}</span></div>`).join('')
-      : '<div class="daymap-muted">нет ключевых фраз</div>';
-    threadsEl.innerHTML = data.threads.length
-      ? data.threads.map(t => `<button class="daymap-thread" data-thread-id="${esc(t.thread_id)}"><span class="daymap-thread-count">${t.count}</span> <span class="daymap-thread-preview">${esc(t.preview)}</span></button>`).join('')
-      : '<div class="daymap-muted">нитей дня нет</div>';
-  } catch (e) {
-    bubblesEl.innerHTML = '<div class="patterns-loading">ошибка загрузки</div>';
-  }
-}
-
-function renderBubbles(data) {
-  const maxCount = Math.max(1, ...data.categories.map(c => c.count));
-  let html = '';
-  for (const c of data.categories) {
-    const r = 26 + Math.round((c.count / maxCount) * 34);
-    const hue = Math.round(((c.sentiment + 1) / 2) * 120);
-    const color = `hsla(${hue}, 55%, 55%, 0.35)`;
-    const border = `hsla(${hue}, 60%, 55%, 0.9)`;
-    html += `<button class="daymap-bubble" data-cat="${esc(c.name)}" title="${esc(c.name)} · ${c.count} мыслей · настрой ${c.sentiment > 0 ? '+' : ''}${c.sentiment}"
-      style="width:${r*2}px;height:${r*2}px;background:${color};border-color:${border}">
-      <span class="daymap-bubble-label">${esc(c.name)}</span>
-      <span class="daymap-bubble-count">${c.count}</span>
-    </button>`;
-  }
-  if (!data.categories.length) {
-    return '<div class="daymap-muted">темы не определены (заметки без категории)</div>';
-  }
-  return html;
-}
-
-async function showDayMapNotes(category) {
-  const notesEl = $('#daymapNotes');
-  try {
-    const notes = await api('GET', '/notes?date=' + selectedDate);
-    const filtered = notes.filter(n => n.ai_category === category);
-    if (!filtered.length) { notesEl.style.display = 'none'; return; }
-    notesEl.style.display = 'block';
-    notesEl.innerHTML = `<div class="daymap-notes-title">${esc(category)}</div>` +
-      filtered.map(n => `<div class="daymap-note">${esc(n.content)}</div>`).join('');
-  } catch (e) { toast('ошибка'); }
-}
-
-async function generateDayEssence() {
-  const btn = $('#daymapEssenceBtn');
-  const essenceEl = $('#daymapEssence');
-  try {
-    btn.disabled = true; btn.textContent = '...';
-    essenceEl.style.display = 'block';
-    essenceEl.innerHTML = '<div class="ai-dot"></div> думаю о дне...';
-    await api('POST', '/insights/day-map/' + selectedDate + '/essence');
-    setTimeout(async () => {
-      try {
-        const data = await api('GET', '/insights/day-map?date=' + selectedDate);
-        essenceEl.innerHTML = data.essence
-          ? `<span class="daymap-essence-mark">&#9678;</span> <span>${esc(data.essence)}</span>`
-          : 'AI не вернул фразу';
-      } catch (e) {}
-    }, 3000);
-    setTimeout(() => {
-      const t = $('#toast');
-      if (t) toast('фраза готова');
-    }, 4000);
-  } catch (e) {
-    essenceEl.style.display = 'none';
-    toast(e.message || 'ошибка');
-  } finally {
-    btn.disabled = false; btn.textContent = '&#9678; фраза дня';
-  }
-}
-
-// ═══ Dreams ═══
-async function loadDreams() {
-  hideAllSections(); $('#dreamsSection').style.display = 'block';
-  await loadDreamHistory();
-}
-
-async function loadDreamHistory() {
-  try {
-    const dreams = await api('GET', '/dreams?days=14');
-    const el = $('#dreamHistory');
-    if (!dreams.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#127769;</div><div class="empty-text">записи о снах появятся здесь</div></div>'; return; }
-    el.innerHTML = dreams.map(d => {
-      const typeLabel = d.dream_type === 'night' ? '&#127769; перед сном' : d.dream_type === 'morning' ? '&#9728; утро' : '&#128161; рефлексия';
-      const quality = d.sleep_quality ? '&#9733;'.repeat(d.sleep_quality) + '&#9734;'.repeat(5 - d.sleep_quality) : '';
-      const symbols = (d.ai_symbols || []).map(s => `<span class="dream-symbol">${esc(s)}</span>`).join('');
-      const time = d.created_at ? new Date(d.created_at).toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'}) : '';
-      return `<div class="dream-history-item">
-        <div class="dream-history-type">${typeLabel} · ${time}</div>
-        <div class="dream-history-content">${esc(d.content)}</div>
-        <div class="dream-history-meta">
-          ${quality ? `<span>${quality}</span>` : ''}
-          ${d.emotion_label ? `<span>${esc(d.emotion_label)}</span>` : ''}
-          ${d.ai_question ? `<span>вопрос: ${esc(d.ai_question)}</span>` : ''}
-        </div>
-        ${symbols ? `<div class="dream-history-symbols">${symbols}</div>` : ''}
-      </div>`;
-    }).join('');
-  } catch (e) { $('#dreamHistory').innerHTML = '<div class="empty-state"><div class="empty-text">ошибка загрузки</div></div>'; }
-}
-
-async function submitNightDream() {
-  const content = $('#dreamNightInput').value.trim();
-  if (!content) { toast('напиши что-нибудь'); return; }
-  const slider = $('#dreamEmotionSlider');
-  const val = parseInt(slider.value);
-  const emotionLabel = val > 30 ? 'спокойно' : val > 0 ? 'нейтрально' : val > -30 ? 'тревожно' : 'тёмно';
-  try {
-    await api('POST', '/dreams', {
-      content, dream_type: 'night', sleep_time: $('#dreamSleepTime').value,
-      emotion_label: emotionLabel,
-    });
-    $('#dreamNightInput').value = '';
-    toast('записано. доброй ночи.');
-    await loadDreamHistory();
-  } catch (e) { toast('ошибка'); }
-}
-
-async function submitMorningDream() {
-  const content = $('#dreamMorningInput').value.trim();
-  if (!content) { toast('вспомни хоть что-нибудь'); return; }
-  try {
-    await api('POST', '/dreams', {
-      content, dream_type: 'morning', wake_time: $('#dreamWakeTime').value,
-      sleep_quality: dreamQuality || null,
-    });
-    $('#dreamMorningInput').value = '';
-    toast('сохранено');
-    await loadDreamInsight();
-    await loadDreamHistory();
-  } catch (e) { toast('ошибка'); }
-}
-
-async function loadDreamInsight() {
-  const el = $('#dreamInsight');
-  el.style.display = 'block';
-  el.innerHTML = '<div class="patterns-loading">думаю...</div>';
-  try {
-    const data = await api('GET', '/dreams/insight');
-    el.innerHTML = `<div class="patterns-insight-content">${esc(data.insight).replace(/\n/g, '<br>')}</div>`;
-  } catch (e) { el.innerHTML = '<div class="patterns-loading">не удалось загрузить инсайт</div>'; }
-}
-
 // ═══ Chat ═══
 let currentSessionId = null;
 
@@ -1016,8 +841,6 @@ function hideAllSections() {
   $('#notesSection').style.display = 'none';
   $('#tasksSection').style.display = 'none';
   $('#goalsSection').style.display = 'none';
-  $('#dayMapSection').style.display = 'none';
-  $('#dreamsSection').style.display = 'none';
   $('#chatSection').classList.remove('active');
   $('#tiktokSection').style.display = 'none';
   $('#archivePanel').style.display = 'none';
@@ -1229,38 +1052,6 @@ document.addEventListener('DOMContentLoaded', () => {
       renderCalendar(); renderPageTitle();
       navigateTo('notes');
     }
-  });
-
-  // Day Map
-  $('#daymapEssenceBtn').addEventListener('click', generateDayEssence);
-  $('#dayMapSection').addEventListener('click', e => {
-    const bubble = e.target.closest('[data-cat]');
-    if (bubble) { showDayMapNotes(bubble.dataset.cat); return; }
-    const thread = e.target.closest('[data-thread-id]');
-    if (thread) { navigateTo('notes'); }
-  });
-
-  // Dreams
-  $$('.dream-mode').forEach(btn => {
-    btn.addEventListener('click', () => {
-      dreamMode = btn.dataset.mode;
-      $$('.dream-mode').forEach(b => b.classList.toggle('active', b.dataset.mode === dreamMode));
-      $('#dreamNightPanel').style.display = dreamMode === 'night' ? 'block' : 'none';
-      $('#dreamMorningPanel').style.display = dreamMode === 'morning' ? 'block' : 'none';
-    });
-  });
-  $('#dreamNightSubmit').addEventListener('click', submitNightDream);
-  $('#dreamMorningSubmit').addEventListener('click', submitMorningDream);
-  $$('.dream-star').forEach(star => {
-    star.addEventListener('click', () => {
-      dreamQuality = parseInt(star.dataset.q);
-      $$('.dream-star').forEach((s, i) => s.classList.toggle('active', i < dreamQuality));
-    });
-  });
-  $('#dreamEmotionSlider').addEventListener('input', (e) => {
-    const val = parseInt(e.target.value);
-    const label = val > 30 ? 'спокойно' : val > 0 ? 'нейтрально' : val > -30 ? 'тревожно' : 'тёмно';
-    $('#dreamEmotionValue').textContent = label;
   });
 
   // Chat

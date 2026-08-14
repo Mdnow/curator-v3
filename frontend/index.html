@@ -12,8 +12,6 @@
   <link rel="stylesheet" href="/css/notes.css?v=6">
   <link rel="stylesheet" href="/css/tasks.css?v=6">
   <link rel="stylesheet" href="/css/goals.css?v=7">
-  <link rel="stylesheet" href="/css/daymap.css?v=6">
-  <link rel="stylesheet" href="/css/dreams.css?v=6">
   <link rel="stylesheet" href="/css/chat.css?v=7">
   <link rel="stylesheet" href="/css/patterns.css?v=6">
   <link rel="stylesheet" href="/css/tiktok.css?v=1">
@@ -88,14 +86,6 @@
       <span class="mobile-tab-icon">&#9873;</span>
       <span>Цели</span>
     </button>
-    <button class="mobile-tab" data-page="daymap">
-      <span class="mobile-tab-icon">&#9678;</span>
-      <span>Карта</span>
-    </button>
-    <button class="mobile-tab" data-page="dreams">
-      <span class="mobile-tab-icon">☽</span>
-      <span>Сон</span>
-    </button>
     <button class="mobile-tab" data-page="chat">
       <span class="mobile-tab-icon">◇</span>
       <span>Куратор</span>
@@ -142,12 +132,6 @@
         </button>
         <button class="nav-btn" data-page="goals">
           <span class="nav-icon">&#9873;</span> Цели
-        </button>
-        <button class="nav-btn" data-page="daymap">
-          <span class="nav-icon">&#9678;</span> Карта
-        </button>
-        <button class="nav-btn" data-page="dreams">
-          <span class="nav-icon">&#127769;</span> Сон
         </button>
         <button class="nav-btn" data-page="chat">
           <span class="nav-icon">&#9671;</span> Куратор
@@ -250,77 +234,6 @@
           <div class="empty-icon">&#9873;</div>
           <div class="empty-text">целей пока нет — нажми «обновить цели»</div>
         </div>
-      </div>
-
-      <!-- Day Map -->
-      <div id="dayMapSection" style="display:none">
-        <div class="daymap-toolbar">
-          <button class="btn btn-small" id="daymapEssenceBtn" title="в чём ты варилась в этот день (1 AI-запрос)">&#9678; фраза дня</button>
-          <span class="daymap-hint">круги — темы дня · размер = объём мыслей · цвет = настрой</span>
-        </div>
-        <div class="daymap-essence" id="daymapEssence" style="display:none"></div>
-        <div class="daymap-bubbles" id="daymapBubbles"></div>
-        <div class="daymap-notes" id="daymapNotes" style="display:none"></div>
-        <div class="daymap-grid">
-          <div class="daymap-col">
-            <div class="daymap-col-title">фразы дня</div>
-            <div class="daymap-phrases" id="daymapPhrases"></div>
-          </div>
-          <div class="daymap-col">
-            <div class="daymap-col-title">нити дня</div>
-            <div class="daymap-threads" id="daymapThreads"></div>
-          </div>
-        </div>
-        <div class="daymap-empty" id="daymapEmpty" style="display:none">
-          <div class="empty-icon">&#9678;</div>
-          <div class="empty-text">в этот день заметок нет</div>
-        </div>
-      </div>
-
-      <!-- Dreams -->
-      <div id="dreamsSection" style="display:none">
-        <div class="dream-mode-toggle">
-          <button class="dream-mode active" data-mode="night">&#127769; перед сном</button>
-          <button class="dream-mode" data-mode="morning">&#9728; утро</button>
-        </div>
-
-        <div class="dream-panel" id="dreamNightPanel">
-          <div class="dream-prompt">что остаётся с тобой сегодня?</div>
-          <textarea class="dream-input" id="dreamNightInput" placeholder="мысли, образы, чувства..." rows="4"></textarea>
-          <div class="dream-emotion">
-            <span class="dream-emotion-label">эмоция:</span>
-            <input type="range" class="dream-slider" id="dreamEmotionSlider" min="-100" max="100" value="0">
-            <span class="dream-emotion-value" id="dreamEmotionValue">нейтрально</span>
-          </div>
-          <div class="dream-meta">
-            <label class="dream-meta-label">время засыпания</label>
-            <input type="time" id="dreamSleepTime">
-          </div>
-          <button class="btn dream-submit" id="dreamNightSubmit">доброй ночи</button>
-        </div>
-
-        <div class="dream-panel" id="dreamMorningPanel" style="display:none">
-          <div class="dream-prompt">что ты помнишь?</div>
-          <textarea class="dream-input" id="dreamMorningInput" placeholder="фрагменты, образы, чувства..." rows="4"></textarea>
-          <div class="dream-quality">
-            <span class="dream-emotion-label">качество сна:</span>
-            <div class="dream-stars" id="dreamStars">
-              <span class="dream-star" data-q="1">&#9734;</span>
-              <span class="dream-star" data-q="2">&#9734;</span>
-              <span class="dream-star" data-q="3">&#9734;</span>
-              <span class="dream-star" data-q="4">&#9734;</span>
-              <span class="dream-star" data-q="5">&#9734;</span>
-            </div>
-          </div>
-          <div class="dream-meta">
-            <label class="dream-meta-label">пробуждение</label>
-            <input type="time" id="dreamWakeTime">
-          </div>
-          <button class="btn dream-submit" id="dreamMorningSubmit">начать день</button>
-        </div>
-
-        <div class="dream-insight" id="dreamInsight" style="display:none"></div>
-        <div class="dream-history" id="dreamHistory"></div>
       </div>
 
       <!-- Chat -->
