@@ -182,8 +182,7 @@ async function loadNotes() {
     for (const [title, items] of Object.entries(groups)) {
       html += `<div class="note-group"><div class="group-header"><span class="group-label">${esc(title)}</span><span class="group-count">${items.length}</span><div class="group-line"></div></div><div class="notes-grid">`;
       for (const note of items) {
-        const t = new Date(note.created_at);
-        const time = String(t.getHours()).padStart(2,'0') + ':' + String(t.getMinutes()).padStart(2,'0');
+        const time = fmtTimeMsk(note.created_at, false);
         const title = noteTitle(note);
         const summary = noteSummary(note);
         let aiHtml = '';
@@ -683,10 +682,29 @@ async function loadArchiveSessions() {
   } catch (e) { list.innerHTML = '<div class="archive-empty">ошибка загрузки</div>'; }
 }
 
+// Время сервера — naive UTC (Neon GMT, колонки timestamp без tz). Парсим как UTC,
+// форматируем явно в московское (UTC+3) — результат не зависит от локали браузера.
+function parseAsUtc(value) {
+  if (!value) return null;
+  let s = String(value);
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) s = s.replace(' ', 'T');
+  if (!/(Z|[+-]\d{2}:\d{2})$/.test(s)) s += 'Z';
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function fmtTimeMsk(value, withDate = true) {
+  const d = parseAsUtc(value);
+  if (!d) return '';
+  const base = { timeZone: 'Europe/Moscow' };
+  const opts = withDate
+    ? Object.assign(base, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : Object.assign(base, { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleString('ru-RU', opts);
+}
+
 function formatArchiveDate(iso) {
-  const d = new Date(iso);
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return fmtTimeMsk(iso, true);
 }
 
 async function openSessionInChat(sessionId) {
