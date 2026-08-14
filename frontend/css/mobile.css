@@ -4,7 +4,7 @@
    ═══════════════════════════════════════════ */
 
 /* ═══ Desktop: this file does nothing ═══ */
-@media (min-width: 801px) {
+@media (min-width: 933px) {
   .mobile-bottom-bar,
   .mobile-hamburger,
   .mobile-drawer-overlay,
@@ -12,7 +12,7 @@
 }
 
 /* ═══ MOBILE ═══ */
-@media (max-width: 800px) {
+@media (max-width: 932px) {
 
   /* ── Variables ── */
   :root {
@@ -803,4 +803,14 @@
   .main-content > div {
     will-change: opacity, transform;
   }
+}
+
+/* ═══ Landscape (iPhone в горизонтальном положении) ═══ */
+@media (max-width: 932px) and (max-height: 500px) {
+  :root {
+    --bar-height: 50px;
+    --header-height: 48px;
+  }
+  .mobile-tab { gap: 2px; }
+  .mobile-tab-icon { font-size: 20px; }
 }

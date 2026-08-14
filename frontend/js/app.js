@@ -13,7 +13,7 @@ let currentUser = null;
 let selectedDate = todayStr();
 let calYear, calMonth;
 let currentPage = 'notes';
-let isMobile = () => window.innerWidth <= 800;
+let isMobile = () => window.innerWidth <= 932;
 let drawerOpen = false;
 
 // ═══ Utils ═══
