@@ -876,31 +876,6 @@ async function submitTikTok() {
   btn.textContent = 'СОХРАНИТЬ'; btn.disabled = false;
 }
 
-// ═══ Voice ═══
-let recognition = null;
-function initVoice() {
-  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) return;
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  recognition = new SpeechRecognition();
-  recognition.lang = 'ru-RU';
-  recognition.interimResults = false;
-  recognition.onresult = (e) => {
-    const text = e.results[0][0].transcript;
-    const input = $('#noteInput');
-    input.value = input.value ? input.value + ' ' + text : text;
-    autoResize(); updateCharCount();
-    $('#voiceBtn').classList.remove('recording');
-  };
-  recognition.onerror = () => { $('#voiceBtn').classList.remove('recording'); };
-  recognition.onend = () => { $('#voiceBtn').classList.remove('recording'); };
-}
-
-function toggleVoice() {
-  if (!recognition) { toast('голос не поддерживается'); return; }
-  if ($('#voiceBtn').classList.contains('recording')) { recognition.stop(); }
-  else { recognition.start(); $('#voiceBtn').classList.add('recording'); }
-}
-
 // ═══ Helpers ═══
 function hideAllSections() {
   $('#notesSection').style.display = 'none';
@@ -1048,10 +1023,6 @@ document.addEventListener('DOMContentLoaded', () => {
     navigateTo('chat');
     $('#chatInput').focus();
   });
-
-  // Voice
-  initVoice();
-  $('#voiceBtn').addEventListener('click', toggleVoice);
 
   // Notes
   $('#notesSection').addEventListener('click', e => {

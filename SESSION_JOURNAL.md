@@ -6,7 +6,21 @@
 
 ---
 
-## Сессия: 2026-08-14 (добавка 5) — починен вход + адаптация под iPhone 12 Pro Max
+## Сессия: 2026-08-14 (добавка 6) — убрана кнопка микрофона (шаг 8 «Карты дня»)
+
+**Тема:** задача из «Карты дня» — убрать неиспользуемую кнопку микрофона из куратора (минимализм, меньше визуального шума).
+
+**Что сделано:**
+- Удалена кнопка `#voiceBtn` (index.html) — `<button class="voice-btn" ...>mic</button>` в `note-input-left`.
+- Удалён весь голосовой блок из app.js: `let recognition`, `initVoice()`, `toggleVoice()`, обработчики `onresult/onerror/onend` и слушатель клика в init (`// Voice`).
+- Удалены стили `.voice-btn`, `.voice-btn:hover`, `.voice-btn.recording` из notes.css.
+- Проверено: grep по `voiceBtn|voice-btn|SpeechRecognition|toggleVoice|initVoice|recognition|\bmic\b|микрофон` во фронте — пусто, мёртвых ссылок нет.
+
+**Проверено:** `node --check app.js` OK; живой прогон (локальный uvicorn + curl /) — HTTP 200, в отдаваемом HTML кнопки микрофона нет (`voiceBtn|voice-btn|микрофон` — 0 совпадений).
+
+**Версии:** `app.js?v=15`, `notes.css?v=10`. **Деплой:** push.
+
+---
 
 **Жалоба пользователя:**
 1. Не может войти в куратор: на экране пустое всплывающее окно, которое не закрывается.

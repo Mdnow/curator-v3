@@ -980,3 +980,21 @@ iPhone 12 Pro Max: портрет 428px, ландшафт 926px. Портрет 
 ### 28.5. Версии и проверка
 `app.js?v=14`, `mobile.css?v=7`, `notes.css?v=9`.
 `node --check` OK; grep по 800/801 в фронте — пусто. Живая проверка на iPhone — у пользователя (у меня нет устройства); логика бага модалки подтверждена специфичностью CSS детерминированно.
+
+## 29. 14.08.2026 — убрана кнопка микрофона (шаг 8 «Карты дня»)
+
+### 29.1. Задача
+Минимализм: кнопка микрофона не используется, только шумит. Удалить компонент + обработчики, убрать мёртвые ссылки, проверить экран.
+
+### 29.2. Что удалено
+- **index.html**: `<button class="voice-btn" id="voiceBtn" title="голос">mic</button>` в `.note-input-left` (остался только `#charCount`).
+- **app.js**: блок `// ═══ Voice ═══` (`let recognition`, `initVoice()` с `webkitSpeechRecognition`/`SpeechRecognition`, обработчики `onresult/onerror/onend`, `toggleVoice()`) и строка инициализации `initVoice(); $('#voiceBtn').addEventListener('click', toggleVoice);` в init.
+- **notes.css**: `.voice-btn`, `.voice-btn:hover`, `.voice-btn.recording`.
+
+### 29.3. Проверка
+- `node --check app.js` OK.
+- Живой прогон: локальный uvicorn, `curl /` → HTTP 200; в HTML нет `voiceBtn|voice-btn|микрофон` (Select-String 0 совпадений).
+- Версии: `app.js?v=15`, `notes.css?v=10`.
+
+### 29.4. Замечания
+- Никаких следов голосового ввода в коде не осталось; при желании фичу можно вернуть по git-истории (до коммита этой задачи).
