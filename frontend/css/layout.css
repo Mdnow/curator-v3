@@ -131,3 +131,24 @@
   backdrop-filter: blur(10px);
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ═══ Chat Panel (right) ═══ */
+.chat-panel {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: min(420px, 100vw);
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  z-index: 300;
+  transform: translateX(105%);
+  transition: transform 0.28s ease;
+  display: flex; flex-direction: column;
+}
+.chat-panel.open { transform: translateX(0); }
+.chat-panel-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 290;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.28s ease;
+}
+.chat-panel-overlay.show { opacity: 1; pointer-events: auto; }

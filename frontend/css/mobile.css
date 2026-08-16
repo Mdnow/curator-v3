@@ -604,23 +604,18 @@
     font-size: 16px;
   }
 
-  /* ═══ CHAT MOBILE ═══ */
-  .chat-section {
-    height: 100vh;
-    height: 100dvh;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    padding-top: calc(var(--safe-top) + var(--header-height));
-    padding-bottom: 0;
-    background: var(--bg);
-    z-index: 50;
+  /* ═══ CHAT PANEL MOBILE ═══ */
+  .chat-panel {
+    width: 100%;
+    border-left: none;
+    z-index: 300;
   }
 
-  .chat-section.active {
-    display: flex;
+  .chat-panel .chat-section {
+    position: static;
+    height: 100%;
+    padding-top: calc(var(--safe-top) + 8px);
+    z-index: auto;
   }
 
   .chat-messages {

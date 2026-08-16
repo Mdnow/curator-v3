@@ -15,6 +15,7 @@ let calYear, calMonth;
 let currentPage = 'notes';
 let isMobile = () => window.innerWidth <= 932;
 let drawerOpen = false;
+let lastCenterPage = 'notes';
 
 // ═══ Utils ═══
 const $ = s => document.querySelector(s);
@@ -73,6 +74,10 @@ async function handleAuth(mode) {
 
 // ═══ Navigation ═══
 function navigateTo(page) {
+  if (page !== 'chat') {
+    lastCenterPage = page;
+    closeChatPanelUI();
+  }
   currentPage = page;
   closeProjectSilently();
   $$('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === page));
@@ -896,12 +901,76 @@ let currentProjectId = null;
 let projectsCache = [];
 
 function showChat() {
-  hideAllSections();
-  $('#chatSection').classList.add('active');
+  openChatPanel();
+}
+
+// ═══ Chat Panel (right) ═══
+function openChatPanel() {
+  $('#chatPanel').classList.add('open');
+  $('#chatPanelOverlay').classList.add('show');
   if (isMobile()) {
     $('#mobileHeader').style.display = 'none';
     $('#mobileBottomBar').style.display = 'none';
   }
+}
+
+function closeChatPanelUI() {
+  $('#chatPanel').classList.remove('open');
+  $('#chatPanelOverlay').classList.remove('show');
+  if (isMobile()) {
+    $('#mobileHeader').style.display = 'flex';
+    $('#mobileBottomBar').style.display = 'flex';
+  }
+}
+
+function closeChatPanel() {
+  if (!$('#chatPanel').classList.contains('open')) return;
+  closeChatPanelUI();
+  navigateTo(lastCenterPage);
+}
+
+// ═══ Edge Swipe — свайп от краёв экрана к панелям ═══
+function initEdgeSwipe() {
+  const EDGE = 24;
+  const THRESHOLD = 60;
+  let startX = 0, startY = 0, edge = null, tracking = false;
+
+  document.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) { tracking = false; return; }
+    const t = e.touches[0];
+    startX = t.clientX; startY = t.clientY;
+    if (startX <= EDGE) edge = 'left';
+    else if (startX >= window.innerWidth - EDGE) edge = 'right';
+    else edge = null;
+    tracking = true;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!tracking) return;
+    const t = e.touches[0];
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    if (Math.abs(dx) < 12 && Math.abs(dy) < 12) return;
+    if (Math.abs(dy) > Math.abs(dx) * 1.5) { tracking = false; return; }
+    const panelOpen = $('#chatPanel').classList.contains('open');
+    if (panelOpen) {
+      if (dx > THRESHOLD && (edge === 'left' || edge === 'right')) {
+        e.preventDefault();
+        tracking = false;
+        closeChatPanel();
+      }
+      return;
+    }
+    if (edge === 'right' && dx < -THRESHOLD) {
+      e.preventDefault();
+      tracking = false;
+      openChatPanel();
+    } else if (edge === 'left' && dx > THRESHOLD) {
+      e.preventDefault();
+      tracking = false;
+      openDrawer();
+    }
+  }, { passive: false });
 }
 
 function newChat() {
@@ -1500,7 +1569,14 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   $('#archiveResults').addEventListener('click', e => { const r = e.target.closest('[data-result-session]'); if (r) openSessionInChat(parseInt(r.dataset.resultSession)); });
   const chatBackBtn = $('#chatBackBtn');
-  if (chatBackBtn) chatBackBtn.addEventListener('click', () => navigateTo('notes'));
+  if (chatBackBtn) chatBackBtn.addEventListener('click', closeChatPanel);
+  const chatCloseBtn = $('#chatCloseBtn');
+  if (chatCloseBtn) chatCloseBtn.addEventListener('click', closeChatPanel);
+  $('#chatPanelOverlay').addEventListener('click', closeChatPanel);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && $('#chatPanel').classList.contains('open')) closeChatPanel();
+  });
+  initEdgeSwipe();
 
   // TikTok
   $('#tiktokBtn').addEventListener('click', submitTikTok);

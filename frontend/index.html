@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="/css/notes.css?v=11">
   <link rel="stylesheet" href="/css/tasks.css?v=6">
   <link rel="stylesheet" href="/css/goals.css?v=7">
-  <link rel="stylesheet" href="/css/chat.css?v=9">
+  <link rel="stylesheet" href="/css/chat.css?v=10">
   <link rel="stylesheet" href="/css/patterns.css?v=6">
   <link rel="stylesheet" href="/css/tiktok.css?v=1">
   <link rel="stylesheet" href="/css/projects.css?v=3">
@@ -252,37 +252,6 @@
         </div>
       </div>
 
-      <!-- Chat -->
-      <div class="chat-section" id="chatSection">
-        <div class="chat-topbar">
-          <span class="chat-title">куратор</span>
-          <button class="btn btn-icon" id="chatNewBtn" title="новый диалог">&#10010;</button>
-          <button class="btn btn-icon" id="archiveToggle" title="диалоги">&#9776;</button>
-        </div>
-        <div class="chat-messages" id="chatMessages">
-          <div class="chat-msg ai">привет. я куратор — помогу структурировать мысли, найти связи, предложить инсайты. о чём думаешь?</div>
-        </div>
-        <div class="chat-input-row">
-          <button class="btn btn-icon chat-back-btn" id="chatBackBtn" title="назад">&#8592;</button>
-          <input type="text" class="chat-input" id="chatInput" placeholder="напиши сообщение...">
-          <button class="btn" id="chatSend">&#10148;</button>
-        </div>
-      </div>
-
-      <!-- Archive -->
-      <div class="archive-panel" id="archivePanel" style="display:none">
-        <div class="archive-header">
-          <button class="btn btn-icon" id="archiveBack">&#8592;</button>
-          <h3>диалоги</h3>
-          <input type="text" class="archive-search" id="archiveSearch" placeholder="поиск...">
-          <button class="btn btn-small" id="archiveClearAll">очистить всё</button>
-        </div>
-        <div class="archive-content" id="archiveContent">
-          <div class="archive-list" id="archiveList"></div>
-          <div class="archive-results" id="archiveResults" style="display:none"></div>
-        </div>
-      </div>
-
       <!-- TikTok -->
       <div id="tiktokSection" style="display:none">
         <div class="tiktok-input-wrapper">
@@ -348,6 +317,41 @@
       </div>
 
     </main>
+
+    <!-- Chat Panel (right) -->
+    <div class="chat-panel-overlay" id="chatPanelOverlay"></div>
+    <aside class="chat-panel" id="chatPanel">
+      <div class="chat-section" id="chatSection">
+        <div class="chat-topbar">
+          <span class="chat-title">куратор</span>
+          <button class="btn btn-icon" id="chatNewBtn" title="новый диалог">&#10010;</button>
+          <button class="btn btn-icon" id="archiveToggle" title="диалоги">&#9776;</button>
+          <button class="btn btn-icon" id="chatCloseBtn" title="закрыть">&#10005;</button>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+          <div class="chat-msg ai">привет. я куратор — помогу структурировать мысли, найти связи, предложить инсайты. о чём думаешь?</div>
+        </div>
+        <div class="chat-input-row">
+          <button class="btn btn-icon chat-back-btn" id="chatBackBtn" title="назад">&#8592;</button>
+          <input type="text" class="chat-input" id="chatInput" placeholder="напиши сообщение...">
+          <button class="btn" id="chatSend">&#10148;</button>
+        </div>
+      </div>
+
+      <!-- Archive -->
+      <div class="archive-panel" id="archivePanel" style="display:none">
+        <div class="archive-header">
+          <button class="btn btn-icon" id="archiveBack">&#8592;</button>
+          <h3>диалоги</h3>
+          <input type="text" class="archive-search" id="archiveSearch" placeholder="поиск...">
+          <button class="btn btn-small" id="archiveClearAll">очистить всё</button>
+        </div>
+        <div class="archive-content" id="archiveContent">
+          <div class="archive-list" id="archiveList"></div>
+          <div class="archive-results" id="archiveResults" style="display:none"></div>
+        </div>
+      </div>
+    </aside>
   </div>
 
   <div class="toast" id="toast"></div>
@@ -400,6 +404,6 @@
     </div>
   </div>
 
-  <script src="/js/app.js?v=16"></script>
+  <script src="/js/app.js?v=17"></script>
 </body>
 </html>

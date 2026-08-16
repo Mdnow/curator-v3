@@ -1,4 +1,4 @@
-.chat-section { display: none; flex-direction: column; height: calc(100vh - 120px); }
+.chat-section { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .chat-section.active { display: flex; }
 .chat-messages {
   flex: 1; overflow-y: auto; display: flex; flex-direction: column;
@@ -79,7 +79,7 @@
 .chat-input::placeholder { color: var(--text-3); }
 
 .archive-panel {
-  display: none; flex-direction: column; height: calc(100vh - 120px);
+  display: none; flex-direction: column; height: 100%;
 }
 .archive-panel { display: none; }
 .archive-header {
