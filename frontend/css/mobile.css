@@ -873,6 +873,8 @@
     font-size: 14px;
   }
 
+  .sel-icon { width: 17px; height: 17px; }
+
   /* ═══ SCROLLBAR ═══ */
   ::-webkit-scrollbar { width: 0; height: 0; }
 

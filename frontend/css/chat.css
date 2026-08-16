@@ -136,4 +136,4 @@
 }
 .sel-btn:hover { background: var(--surface); }
 .sel-btn-accent { color: var(--accent); }
-.sel-icon { font-size: var(--font-sm); }
+.sel-icon { font-size: var(--font-sm); width: 15px; height: 15px; flex-shrink: 0; }

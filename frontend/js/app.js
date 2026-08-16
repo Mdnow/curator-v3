@@ -1203,32 +1203,50 @@ function closeDrawer() {
 function initSelectionToolbar() {
   const toolbar = $('#selectionToolbar');
   let selectedText = '';
+  let hideTimer = null;
 
   function showToolbar(range) {
     const rect = range.getBoundingClientRect();
     const tw = toolbar.offsetWidth || 228;
-    let top = rect.top - 48;
-    if (top < 8) top = rect.bottom + 8;
-    let left = rect.left + rect.width / 2 - tw / 2;
-    left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
-    toolbar.style.top = top + 'px';
-    toolbar.style.left = left + 'px';
-    toolbar.style.bottom = 'auto';
+    if (isMobile()) {
+      const bh = parseInt(
+        getComputedStyle(document.documentElement)
+          .getPropertyValue('--bar-height') || '64', 10
+      ) || 64;
+      toolbar.style.top = 'auto';
+      toolbar.style.left = '50%';
+      toolbar.style.bottom = 'calc(var(--safe-bottom, 0px) + ' + bh + 'px + 16px)';
+      toolbar.style.transform = 'translateX(-50%)';
+    } else {
+      let top = rect.top - 48;
+      if (top < 8) top = rect.bottom + 8;
+      let left = rect.left + rect.width / 2 - tw / 2;
+      left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
+      toolbar.style.top = top + 'px';
+      toolbar.style.left = left + 'px';
+      toolbar.style.bottom = 'auto';
+      toolbar.style.transform = 'none';
+    }
     toolbar.style.display = 'flex';
   }
 
   function maybeShow() {
     const sel = window.getSelection();
-    if (!sel || sel.isCollapsed || !sel.toString().trim()) { toolbar.style.display = 'none'; return; }
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) { hideToolbar(); return; }
     const text = sel.toString().trim();
-    if (text.length < 3) { toolbar.style.display = 'none'; return; }
+    if (text.length < 3) { hideToolbar(); return; }
     const range = sel.getRangeAt(0);
     if (toolbar.contains(range.commonAncestorContainer)) return;
     const node = range.commonAncestorContainer;
     const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
-    if (el && el.closest('input, textarea, [contenteditable="true"]')) { toolbar.style.display = 'none'; return; }
+    if (el && el.closest('input, textarea, [contenteditable="true"]')) { hideToolbar(); return; }
     selectedText = text;
     showToolbar(range);
+  }
+
+  function hideToolbar() {
+    toolbar.style.display = 'none';
+    selectedText = '';
   }
 
   let selTimer = null;
@@ -1242,21 +1260,27 @@ function initSelectionToolbar() {
   });
   document.addEventListener('touchend', (e) => {
     if (toolbar.contains(e.target)) return;
-    setTimeout(maybeShow, 10);
+    clearTimeout(hideTimer);
+    setTimeout(maybeShow, 300);
   });
   document.addEventListener('mousedown', (e) => {
-    if (!toolbar.contains(e.target)) { toolbar.style.display = 'none'; selectedText = ''; }
+    if (toolbar.contains(e.target)) return;
+    hideToolbar();
   });
   document.addEventListener('touchstart', (e) => {
-    if (!toolbar.contains(e.target)) { toolbar.style.display = 'none'; selectedText = ''; }
+    if (toolbar.contains(e.target)) return;
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || !sel.toString().trim()) hideToolbar();
+    }, 500);
   });
-  document.addEventListener('scroll', () => { toolbar.style.display = 'none'; selectedText = ''; }, true);
+  document.addEventListener('scroll', hideToolbar, true);
 
   function clearSelection() {
     const sel = window.getSelection();
     if (sel) sel.removeAllRanges();
-    toolbar.style.display = 'none';
-    selectedText = '';
+    hideToolbar();
   }
 
   $('#selAsk').addEventListener('click', () => {
