@@ -11,6 +11,47 @@ router = APIRouter(prefix="/api", tags=["chat"])
 
 _SAVE_RE = re.compile(r"\[SAVE:(.+?)\]", re.DOTALL)
 
+_SAVE_INTENT_WORDS = (
+    "сохрани",
+    "сохраните",
+    "сохранить",
+    "сохраню",
+    "запиши",
+    "запишите",
+    "записать",
+    "запишу",
+    "запомни",
+    "запомните",
+    "запомнить",
+    "занеси",
+    "занесите",
+    "занести",
+    "сделай заметку",
+    "сделайте заметку",
+    "сделай запись",
+    "сделайте запись",
+    "в заметки",
+    "в заметку",
+    "save",
+)
+
+# Слова, которые НЕ являются просьбой, хотя и похожи на неё
+# («надо запомнить» — оценка, а не приказ сохранить).
+_SAVE_NEGATIVE_MARKERS = (
+    "надо запомнить",
+    "нужно запомнить",
+    "стоит запомнить",
+    "хочу запомнить",
+)
+
+
+def _has_save_intent(message: str) -> bool:
+    """Пользователь явно попросил сохранить (глагол-просьба, а не «это важно»)."""
+    low = message.lower()
+    if any(m in low for m in _SAVE_NEGATIVE_MARKERS):
+        return False
+    return any(word in low for word in _SAVE_INTENT_WORDS)
+
 
 def _extract_note_refs(text: str) -> list[int]:
     """Уникальные id заметок из маркеров [NOTE:id] в ответе куратора."""
@@ -208,12 +249,15 @@ async def ai_chat(
         # Сохранение по явной просьбе пользователя: куратор добавляет в ответ
         # маркер [SAVE:текст], который превращается в заметку. Маркер из ответа
         # вырезается, чтобы пользователь его не видел и он не попал в историю.
+        # Защита от самовольного сохранения: маркер уважается только если
+        # пользователь явно просил сохранить. Иначе маркер вырезается, но
+        # заметка не создаётся (free-модели иногда добавляют [SAVE:] сами).
         saved = None
         save_match = _SAVE_RE.search(result)
         if save_match:
             thought_text = save_match.group(1).strip()
             result = _SAVE_RE.sub("", result).strip()
-            if thought_text:
+            if thought_text and _has_save_intent(req.message):
                 saved = await _save_note(db, user_id, thought_text, background)
 
         await db.execute(
