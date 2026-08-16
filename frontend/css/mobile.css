@@ -768,8 +768,6 @@
 
   /* ═══ SELECTION TOOLBAR MOBILE ═══ */
   .selection-toolbar {
-    bottom: calc(var(--safe-bottom) + var(--bar-height) + 12px);
-    top: auto;
     border-radius: var(--radius-md);
     padding: 6px;
   }

@@ -125,7 +125,7 @@
 .archive-result mark { background: var(--accent-bg); color: var(--accent); border-radius: 2px; padding: 0 2px; }
 
 .selection-toolbar {
-  position: fixed; z-index: 999; display: flex; gap: var(--space-xs);
+  position: fixed; z-index: 2000; display: flex; gap: var(--space-xs);
   background: var(--bg-alt); border: 1px solid var(--border); border-radius: var(--radius-sm);
   padding: var(--space-xs); box-shadow: 0 4px 20px rgba(43,39,34,0.15);
 }

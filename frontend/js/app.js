@@ -928,30 +928,78 @@ function closeDrawer() {
   document.body.style.overflow = '';
 }
 
-// ═══ Selection Toolbar ═══
+// ═══ Selection Toolbar — выделение в любом месте приложения ═══
 function initSelectionToolbar() {
   const toolbar = $('#selectionToolbar');
   let selectedText = '';
+
+  function showToolbar(range) {
+    const rect = range.getBoundingClientRect();
+    const tw = toolbar.offsetWidth || 228;
+    let top = rect.top - 48;
+    if (top < 8) top = rect.bottom + 8;
+    let left = rect.left + rect.width / 2 - tw / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
+    toolbar.style.top = top + 'px';
+    toolbar.style.left = left + 'px';
+    toolbar.style.bottom = 'auto';
+    toolbar.style.display = 'flex';
+  }
+
+  function maybeShow() {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) { toolbar.style.display = 'none'; return; }
+    const text = sel.toString().trim();
+    if (text.length < 3) { toolbar.style.display = 'none'; return; }
+    const range = sel.getRangeAt(0);
+    if (toolbar.contains(range.commonAncestorContainer)) return;
+    const node = range.commonAncestorContainer;
+    const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+    if (el && el.closest('input, textarea, [contenteditable="true"]')) { toolbar.style.display = 'none'; return; }
+    selectedText = text;
+    showToolbar(range);
+  }
+
+  let selTimer = null;
+  document.addEventListener('selectionchange', () => {
+    clearTimeout(selTimer);
+    selTimer = setTimeout(maybeShow, 250);
+  });
   document.addEventListener('mouseup', (e) => {
     if (toolbar.contains(e.target)) return;
-    setTimeout(() => {
-      const sel = window.getSelection();
-      if (!sel || sel.isCollapsed || !sel.toString().trim()) { toolbar.style.display = 'none'; return; }
-      const text = sel.toString().trim();
-      if (text.length < 3) { toolbar.style.display = 'none'; return; }
-      const range = sel.getRangeAt(0);
-      const chatEl = $('#chatMessages');
-      if (!chatEl || !chatEl.contains(range.commonAncestorContainer)) { toolbar.style.display = 'none'; return; }
-      selectedText = text;
-      const rect = range.getBoundingClientRect();
-      let top = rect.top - 48; if (top < 8) top = rect.bottom + 8;
-      let left = rect.left + rect.width / 2 - 110; left = Math.max(8, Math.min(left, window.innerWidth - 228));
-      toolbar.style.top = top + 'px'; toolbar.style.left = left + 'px'; toolbar.style.display = 'flex';
-    }, 10);
+    setTimeout(maybeShow, 10);
   });
-  document.addEventListener('mousedown', (e) => { if (!toolbar.contains(e.target)) { toolbar.style.display = 'none'; selectedText = ''; } });
-  $('#selAsk').addEventListener('click', () => { if (!selectedText) return; $('#chatInput').value = 'расскажи подробнее: "' + selectedText + '"'; $('#chatInput').focus(); toolbar.style.display = 'none'; navigateTo('chat'); });
-  $('#selSave').addEventListener('click', async () => { if (!selectedText) return; await saveThought(selectedText); toolbar.style.display = 'none'; });
+  document.addEventListener('touchend', (e) => {
+    if (toolbar.contains(e.target)) return;
+    setTimeout(maybeShow, 10);
+  });
+  document.addEventListener('mousedown', (e) => {
+    if (!toolbar.contains(e.target)) { toolbar.style.display = 'none'; selectedText = ''; }
+  });
+  document.addEventListener('touchstart', (e) => {
+    if (!toolbar.contains(e.target)) { toolbar.style.display = 'none'; selectedText = ''; }
+  });
+  document.addEventListener('scroll', () => { toolbar.style.display = 'none'; selectedText = ''; }, true);
+
+  function clearSelection() {
+    const sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+    toolbar.style.display = 'none';
+    selectedText = '';
+  }
+
+  $('#selAsk').addEventListener('click', () => {
+    if (!selectedText) return;
+    $('#chatInput').value = 'расскажи подробнее: "' + selectedText + '"';
+    $('#chatInput').focus();
+    clearSelection();
+    navigateTo('chat');
+  });
+  $('#selSave').addEventListener('click', async () => {
+    if (!selectedText) return;
+    await saveThought(selectedText);
+    clearSelection();
+  });
 }
 
 // ═══ Init ═══
