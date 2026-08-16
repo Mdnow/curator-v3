@@ -38,7 +38,7 @@
   transition: all 0.15s;
 }
 .project-item:hover { background: var(--surface-hover); }
-.project-item.active { border-left-color: var(--accent); background: var(--accent-bg); }
+.project-item.active { border-left-color: var(--accent); background: var(--bg); }
 .project-item-name {
   flex: 1; font-size: var(--font-sm); color: var(--text-1);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
