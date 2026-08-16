@@ -46,14 +46,15 @@
 .project-section.active { display: flex; }
 
 .project-topbar {
-  display: flex; align-items: center; gap: var(--space-sm);
-  padding: var(--space-sm) 0; border-bottom: 1px solid var(--border);
-  margin-bottom: var(--space-sm);
+  display: flex; align-items: center; gap: var(--space-xs);
+  padding: 4px 0; border-bottom: 1px solid var(--border);
+  margin-bottom: var(--space-xs);
 }
+.project-topbar .btn-icon { padding: 4px 6px; font-size: var(--font-sm); }
 .project-title-input {
   flex: 1; min-width: 0; background: transparent; border: 1px solid transparent;
-  border-radius: var(--radius-sm); color: var(--text-1); font-size: var(--font-lg);
-  font-weight: 300; padding: 4px 8px; outline: none; transition: border-color 0.2s;
+  border-radius: var(--radius-sm); color: var(--text-1); font-size: var(--font-md);
+  font-weight: 300; padding: 2px 8px; outline: none; transition: border-color 0.2s;
 }
 .project-title-input:not(:disabled) {
   border-color: var(--border-focus); background: var(--surface);
