@@ -6,7 +6,7 @@
 }
 .chat-msg {
   max-width: 80%; padding: 8px 12px; border-radius: var(--radius-md);
-  font-size: var(--font-sm); font-weight: 300; line-height: 1.5; animation: fadeUp 0.2s ease;
+  font-size: 0.7rem; font-weight: 300; line-height: 1.45; animation: fadeUp 0.2s ease;
   white-space: pre-wrap;
 }
 .chat-msg.user {
@@ -45,7 +45,7 @@
 }
 .chat-note-ref:hover { background: var(--accent-bg); border-color: var(--accent-hover); }
 .chat-note-ref-title {
-  color: var(--text-1); font-size: var(--font-sm); font-weight: 400; flex: 1;
+  color: var(--text-1); font-size: 0.7rem; font-weight: 400; flex: 1;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .chat-note-ref-date { font-size: var(--font-xs); color: var(--text-3); white-space: nowrap; }
@@ -73,7 +73,7 @@
 .chat-input {
   flex: 1; background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius-sm); padding: 8px var(--space-md); color: var(--text-1);
-  font-size: var(--font-sm); outline: none; transition: border-color 0.2s;
+  font-size: 0.7rem; outline: none; transition: border-color 0.2s;
 }
 .chat-input:focus { border-color: var(--border-focus); }
 .chat-input::placeholder { color: var(--text-3); }
