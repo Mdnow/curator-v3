@@ -931,7 +931,7 @@ function closeChatPanel() {
 
 // ═══ Swipe — свайп влево/вправо с любой точки экрана к панелям ═══
 function initSwipe() {
-  const THRESHOLD = 60;
+  const THRESHOLD = 72;
   let startX = 0, startY = 0, tracking = false;
 
   document.addEventListener('touchstart', (e) => {
