@@ -113,7 +113,9 @@ async def _download_ytdlp(url: str, dest: str) -> bool:
         proc = await asyncio.create_subprocess_exec(
             "yt-dlp",
             "-f",
-            "mp4/best",
+            "bv*+ba/b",
+            "--merge-output-format",
+            "mp4",
             "--extractor-args",
             TIKTOK_EXTRACTOR_ARGS,
             "--no-playlist",
@@ -124,7 +126,7 @@ async def _download_ytdlp(url: str, dest: str) -> bool:
             "--no-progress",
             url,
         )
-        await asyncio.wait_for(proc.communicate(), timeout=120)
+        await asyncio.wait_for(proc.communicate(), timeout=300)
         return os.path.exists(dest) and os.path.getsize(dest) > 0
     except Exception:
         return False
@@ -140,7 +142,7 @@ async def download_video(url: str, task_id: int) -> dict:
     if meta is not None:
         dest = os.path.join(TMP_DIR, f"{task_id}_{meta['id'] or 'video'}.mp4")
         try:
-            async with httpx.AsyncClient(timeout=90, follow_redirects=True) as client:
+            async with httpx.AsyncClient(timeout=180, follow_redirects=True) as client:
                 r = await client.get(
                     meta["video_url"],
                     headers={"Referer": "https://www.tiktok.com/"},
@@ -416,6 +418,15 @@ async def process_task(task_id: int, user_id: int) -> None:
         reason = ""
         if meta.get("video_path"):
             audio_text, reason = await transcribe_video(meta["video_path"], task_id)
+            if not audio_text and "извлечь звук не удалось" in reason:
+                retry = os.path.join(TMP_DIR, f"{task_id}_retry.mp4")
+                print(
+                    f"[tiktok] task {task_id} нет аудио в httpx-файле, "
+                    "перекачка через yt-dlp",
+                    flush=True,
+                )
+                if await _download_ytdlp(url, retry):
+                    audio_text, reason = await transcribe_video(retry, task_id)
             if audio_text:
                 await _set_status(task_id, status="translating")
                 translation, t_reason = await translate_transcript(audio_text)
