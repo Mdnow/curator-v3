@@ -16,6 +16,10 @@
   text-transform: uppercase; letter-spacing: 0.08em;
 }
 .projects-add-btn { padding: 2px 8px; font-size: var(--font-sm); }
+.projects-add-form {
+  display: flex; flex-direction: column; gap: var(--space-xs);
+}
+.projects-add-form .btn { align-self: stretch; }
 .projects-add-form input {
   width: 100%; background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius-sm); padding: 8px var(--space-sm); color: var(--text-1);
@@ -48,7 +52,7 @@
 .project-topbar {
   display: flex; align-items: center; gap: var(--space-xs);
   padding: 4px 0; border-bottom: 1px solid var(--border);
-  margin-bottom: var(--space-xs);
+  margin-bottom: var(--space-xs); flex-shrink: 0;
 }
 .project-topbar .btn-icon { padding: 4px 6px; font-size: var(--font-sm); }
 .project-title-input {
@@ -61,16 +65,21 @@
 }
 .project-delete-btn { color: var(--danger); }
 
+/* ── Вкладки (только мобильный) ── */
+.project-tabs { display: none; }
+
+/* ── Тело проекта: десктоп — две колонки ── */
+.project-body { display: flex; flex: 1; min-height: 0; gap: var(--space-md); }
+
 /* ── Материалы проекта ── */
 .project-materials {
+  flex: 0 0 360px; min-width: 0; display: flex; flex-direction: column;
   border: 1px solid var(--border); border-radius: var(--radius-md);
-  padding: var(--space-md); background: var(--surface);
-  margin-bottom: var(--space-md); max-height: 45%; overflow-y: auto;
-  flex-shrink: 0;
+  padding: var(--space-md); background: var(--surface); overflow-y: auto;
 }
 .project-materials-head {
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: var(--space-sm);
+  margin-bottom: var(--space-sm); flex-shrink: 0;
 }
 .project-materials-label {
   font-size: var(--font-xs); color: var(--text-3);
@@ -79,7 +88,7 @@
 .project-materials-count { font-size: var(--font-xs); color: var(--text-3); }
 .project-note-input-row {
   display: flex; gap: var(--space-sm); align-items: flex-end;
-  margin-bottom: var(--space-sm);
+  margin-bottom: var(--space-sm); flex-shrink: 0;
 }
 .project-note-input-row .note-input { flex: 1; }
 
@@ -110,12 +119,16 @@
 }
 
 /* ── Чат проекта ── */
-.project-chat { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.project-chat {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0;
+}
 .project-chat-title {
   font-size: var(--font-xs); color: var(--text-3);
   text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: var(--space-xs);
+  flex-shrink: 0;
 }
 .project-chat-messages { flex: 1; overflow-y: auto; min-height: 0; }
+.project-chat .chat-input-row { flex-shrink: 0; }
 
 /* ── Назначение заметки в проект ── */
 .assign-modal {

@@ -216,7 +216,13 @@ async function loadNotes() {
           </div>
           <div class="note-meta">
             <button class="note-fav" data-fav-note="${note.id}" title="в избранное">${note.is_favorited ? '&#9733;' : '&#9734;'}</button>
-            <button class="note-assign-btn" data-assign-note="${note.id}" data-assign-cur="${note.project_id || 0}" title="${note.project_id ? 'сменить проект' : 'в проект'}">${note.project_id ? 'проект' : 'в проект'}</button>
+            <button class="note-assign-btn ${note.project_id ? 'assigned' : ''}" data-assign-note="${note.id}" data-assign-cur="${note.project_id || 0}" title="${note.project_id ? 'сменить проект' : 'в проект'}">
+              <svg class="assign-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                <line x1="12" y1="11" x2="12" y2="17"></line>
+                <line x1="9" y1="14" x2="15" y2="14"></line>
+              </svg>
+            </button>
             <span class="note-expand-btn" data-expand-note="${note.id}" title="развернуть текст">показать текст</span>
             <span class="note-time">${time}</span>
             ${note.mood ? `<span class="note-mood">${esc(note.mood)}</span>` : ''}
@@ -634,6 +640,22 @@ async function createProject() {
   } catch (e) { toast(e.message || 'ошибка'); }
 }
 
+async function createProjectMobile() {
+  const input = $('#projectsAddInputMobile');
+  const name = input.value.trim();
+  input.value = '';
+  $('#projectsAddFormMobile').style.display = 'none';
+  if (!name) return;
+  try {
+    const p = await api('POST', '/projects', { name });
+    projectsCache.push(p);
+    renderProjects();
+    toast('проект создан');
+    closeDrawer();
+    openProject(p.id);
+  } catch (e) { toast(e.message || 'ошибка'); }
+}
+
 function closeProjectSilently() {
   currentProjectId = null;
   $('#projectSection').classList.remove('active');
@@ -648,12 +670,21 @@ function openProject(id) {
   currentProjectId = id;
   hideAllSections();
   $('#projectSection').classList.add('active');
+  switchProjectTab('chat');
   renderProjects();
   if (isMobile()) {
     $('#mobileHeader').style.display = 'none';
     $('#mobileBottomBar').style.display = 'none';
   }
   loadProjectDetail();
+}
+
+function switchProjectTab(tab) {
+  $$('.project-tab').forEach(b => b.classList.toggle('active', b.dataset.projectTab === tab));
+  const mat = $('#projectMaterialsPane');
+  const chat = $('#projectChatPane');
+  if (mat) mat.classList.toggle('pane-active', tab === 'materials');
+  if (chat) chat.classList.toggle('pane-active', tab === 'chat');
 }
 
 function closeProject() {
@@ -675,6 +706,11 @@ function renderProjectNotes(notes) {
   const list = $('#projectNotesList');
   const empty = $('#projectNotesEmpty');
   const countEl = $('#projectMaterialsCount');
+  const badge = $('#projectTabCount');
+  if (badge) {
+    badge.textContent = notes.length;
+    badge.classList.toggle('show', notes.length > 0);
+  }
   if (countEl) countEl.textContent = notes.length ? notes.length + ' записей' : '';
   if (!notes.length) {
     list.innerHTML = '';
@@ -1498,22 +1534,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') createProject();
     if (e.key === 'Escape') { $('#projectsAddForm').style.display = 'none'; }
   });
+  $('#projectsAddSubmit').addEventListener('click', createProject);
   $('#projectsAddMobile').addEventListener('click', () => {
     const form = $('#projectsAddFormMobile');
     form.style.display = form.style.display === 'none' ? 'block' : 'none';
     if (form.style.display === 'block') $('#projectsAddInputMobile').focus();
   });
+  $('#projectsAddSubmitMobile').addEventListener('click', createProjectMobile);
   $('#projectsAddInputMobile').addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-      const name = $('#projectsAddInputMobile').value.trim();
-      $('#projectsAddInputMobile').value = '';
-      $('#projectsAddFormMobile').style.display = 'none';
-      if (name) {
-        api('POST', '/projects', { name }).then(p => {
-          projectsCache.push(p); renderProjects(); toast('проект создан'); openProject(p.id);
-        }).catch(() => toast('ошибка'));
-      }
-    }
+    if (e.key === 'Enter') { e.preventDefault(); createProjectMobile(); }
   });
   $('#projectsList').addEventListener('click', e => { const it = e.target.closest('[data-project-id]'); if (it) openProject(parseInt(it.dataset.projectId)); });
   $('#projectsListMobile').addEventListener('click', e => { const it = e.target.closest('[data-project-id]'); if (it) { closeDrawer(); openProject(parseInt(it.dataset.projectId)); } });
@@ -1531,6 +1560,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#projectNoteInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveProjectNote(); } });
   $('#projectChatSend').addEventListener('click', sendProjectChat);
   $('#projectChatInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendProjectChat(); } });
+  $$('.project-tab').forEach(b => b.addEventListener('click', () => switchProjectTab(b.dataset.projectTab)));
   $('#projectNotesList').addEventListener('click', e => {
     const unassign = e.target.closest('[data-pnote-unassign]');
     if (unassign) { unassignProjectNote(parseInt(unassign.dataset.pnoteUnassign)); return; }

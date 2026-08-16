@@ -109,6 +109,15 @@
 .note-fav:hover, .task-fav:hover { color: var(--warning); }
 .note-card.favorited, .task-card.favorited { border-color: rgba(251,191,36,0.2); }
 .note-card.favorited .note-fav, .task-card.favorited .task-fav { color: var(--warning); }
+.note-assign-btn {
+  background: none; border: none; color: var(--text-3); cursor: pointer;
+  font-size: var(--font-md); padding: 2px 6px; border-radius: var(--radius-xs);
+  transition: all 0.15s; line-height: 1; display: inline-flex; align-items: center;
+}
+.note-assign-btn:hover { color: var(--accent); }
+.note-assign-btn.assigned { color: var(--accent); }
+.note-assign-btn .assign-icon { width: 15px; height: 15px; }
+.note-assign-btn.assigned .assign-icon { stroke-width: 2.4; }
 
 .empty-state { text-align: center; padding: var(--space-xl) 0; }
 .empty-icon { font-size: 2rem; color: var(--text-3); margin-bottom: var(--space-md); }
