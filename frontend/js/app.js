@@ -932,12 +932,14 @@ function closeChatPanel() {
 // ═══ Swipe — свайп влево/вправо с любой точки экрана к панелям ═══
 function initSwipe() {
   const THRESHOLD = 72;
-  let startX = 0, startY = 0, tracking = false;
+  const LONG_PRESS_MS = 350;
+  let startX = 0, startY = 0, startTime = 0, tracking = false;
 
   document.addEventListener('touchstart', (e) => {
     if (e.touches.length !== 1) { tracking = false; return; }
     const t = e.touches[0];
     startX = t.clientX; startY = t.clientY;
+    startTime = performance.now();
     tracking = true;
   }, { passive: true });
 
@@ -947,7 +949,10 @@ function initSwipe() {
     const dx = t.clientX - startX;
     const dy = t.clientY - startY;
     if (Math.abs(dx) < 12 && Math.abs(dy) < 12) return;
+    if (performance.now() - startTime > LONG_PRESS_MS) { tracking = false; return; }
     if (Math.abs(dy) > Math.abs(dx) * 1.5) { tracking = false; return; }
+    const sel = window.getSelection();
+    if (sel && sel.toString()) { tracking = false; return; }
     const panelOpen = $('#chatPanel').classList.contains('open');
     if (panelOpen) {
       if (dx > THRESHOLD) {
