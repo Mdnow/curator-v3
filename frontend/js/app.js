@@ -929,19 +929,15 @@ function closeChatPanel() {
   navigateTo(lastCenterPage);
 }
 
-// ═══ Edge Swipe — свайп от краёв экрана к панелям ═══
-function initEdgeSwipe() {
-  const EDGE = 24;
+// ═══ Swipe — свайп влево/вправо с любой точки экрана к панелям ═══
+function initSwipe() {
   const THRESHOLD = 60;
-  let startX = 0, startY = 0, edge = null, tracking = false;
+  let startX = 0, startY = 0, tracking = false;
 
   document.addEventListener('touchstart', (e) => {
     if (e.touches.length !== 1) { tracking = false; return; }
     const t = e.touches[0];
     startX = t.clientX; startY = t.clientY;
-    if (startX <= EDGE) edge = 'left';
-    else if (startX >= window.innerWidth - EDGE) edge = 'right';
-    else edge = null;
     tracking = true;
   }, { passive: true });
 
@@ -954,18 +950,18 @@ function initEdgeSwipe() {
     if (Math.abs(dy) > Math.abs(dx) * 1.5) { tracking = false; return; }
     const panelOpen = $('#chatPanel').classList.contains('open');
     if (panelOpen) {
-      if (dx > THRESHOLD && (edge === 'left' || edge === 'right')) {
+      if (dx > THRESHOLD) {
         e.preventDefault();
         tracking = false;
         closeChatPanel();
       }
       return;
     }
-    if (edge === 'right' && dx < -THRESHOLD) {
+    if (dx < -THRESHOLD) {
       e.preventDefault();
       tracking = false;
       openChatPanel();
-    } else if (edge === 'left' && dx > THRESHOLD) {
+    } else if (dx > THRESHOLD) {
       e.preventDefault();
       tracking = false;
       openDrawer();
@@ -1576,7 +1572,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && $('#chatPanel').classList.contains('open')) closeChatPanel();
   });
-  initEdgeSwipe();
+  initSwipe();
 
   // TikTok
   $('#tiktokBtn').addEventListener('click', submitTikTok);
