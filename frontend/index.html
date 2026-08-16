@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#06060f">
   <title>КУРАТОР v3</title>
   <link rel="stylesheet" href="/css/base.css?v=6">
-  <link rel="stylesheet" href="/css/layout.css?v=6">
+  <link rel="stylesheet" href="/css/layout.css?v=7">
   <link rel="stylesheet" href="/css/notes.css?v=11">
   <link rel="stylesheet" href="/css/tasks.css?v=6">
   <link rel="stylesheet" href="/css/goals.css?v=7">
@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="/css/tiktok.css?v=1">
   <link rel="stylesheet" href="/css/projects.css?v=3">
   <link rel="stylesheet" href="/css/animations.css?v=6">
-  <link rel="stylesheet" href="/css/mobile.css?v=11">
+  <link rel="stylesheet" href="/css/mobile.css?v=12">
 </head>
 <body>
 
@@ -42,7 +42,6 @@
     </div>
 
     <div class="drawer-section">
-      <div class="drawer-section-title">календарь</div>
       <div class="mobile-calendar">
         <div class="calendar">
           <div class="cal-header">
@@ -56,22 +55,18 @@
           <div class="cal-days" id="calDaysMobile"></div>
         </div>
       </div>
-      <button class="drawer-btn btn-today-mobile" style="margin-top:8px">
-        <span class="drawer-btn-icon">•</span> сегодня
+      <button class="drawer-btn btn-today-mobile" style="margin-top:8px" title="сегодня">
+        <svg class="today-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 10.5 12 3l9 7.5"></path>
+          <path d="M5 9.5V21h14V9.5"></path>
+        </svg>
       </button>
     </div>
 
     <div class="drawer-section">
-      <div class="drawer-section-title">инструменты</div>
-      <button class="drawer-btn btn-daily-summary-mobile">
-        <span class="drawer-btn-icon">+</span> итог дня
-      </button>
-      <button class="drawer-btn btn-backup-mobile">
-        <span class="drawer-btn-icon">↓</span> бекап
-      </button>
-      <button class="drawer-btn btn-reanalyze-mobile">
-        <span class="drawer-btn-icon">♻</span> переанализ заметок
-      </button>
+      <button class="drawer-btn btn-daily-summary-mobile">итог</button>
+      <button class="drawer-btn btn-backup-mobile">бекап</button>
+      <button class="drawer-btn btn-reanalyze-mobile">анализ</button>
     </div>
 
     <div class="drawer-section">
@@ -140,18 +135,10 @@
       </div>
 
       <nav class="nav-section">
-        <button class="nav-btn active" data-page="notes">
-          <span class="nav-icon">&#9998;</span> Заметки
-        </button>
-        <button class="nav-btn" data-page="goals">
-          <span class="nav-icon">&#9873;</span> Цели
-        </button>
-        <button class="nav-btn" data-page="chat">
-          <span class="nav-icon">&#9671;</span> Куратор
-        </button>
-        <button class="nav-btn" data-page="tiktok">
-          <span class="nav-icon">&#9654;</span> Тикток
-        </button>
+        <button class="nav-btn active" data-page="notes">Заметки</button>
+        <button class="nav-btn" data-page="goals">Цели</button>
+        <button class="nav-btn" data-page="chat">Куратор</button>
+        <button class="nav-btn" data-page="tiktok">Тикток</button>
       </nav>
 
       <div class="projects-sidebar">
@@ -166,7 +153,12 @@
         <div class="projects-list" id="projectsList"></div>
       </div>
 
-      <button class="btn btn-small" id="btnToday">Сегодня</button>
+      <button class="btn btn-small btn-today" id="btnToday" title="сегодня">
+        <svg class="today-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 10.5 12 3l9 7.5"></path>
+          <path d="M5 9.5V21h14V9.5"></path>
+        </svg>
+      </button>
 
       <div class="calendar">
         <div class="cal-header">
@@ -181,9 +173,9 @@
       </div>
 
       <div class="sidebar-footer">
-        <button class="btn btn-small btn-ghost" id="btnDailySummary" title="итог дня">&#10022; итог дня</button>
-        <button class="btn btn-small btn-ghost" id="btnBackup">&#8681; бекап</button>
-        <button class="btn btn-small btn-ghost" id="btnReanalyze">&#9835; переанализ</button>
+        <button class="btn btn-small btn-ghost" id="btnDailySummary" title="итог дня">итог</button>
+        <button class="btn btn-small btn-ghost" id="btnBackup" title="бекап">бекап</button>
+        <button class="btn btn-small btn-ghost" id="btnReanalyze" title="переанализ заметок">анализ</button>
         <span class="sidebar-user" id="sidebarUser"></span>
       </div>
     </aside>

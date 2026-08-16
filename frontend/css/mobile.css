@@ -268,6 +268,12 @@
   }
   .drawer-user:active { color: var(--text-2); }
 
+  .btn-today-mobile {
+    justify-content: center;
+    color: var(--text-3);
+  }
+  .btn-today-mobile .today-icon { width: 20px; height: 20px; }
+
   /* ── Calendar in Drawer ── */
   .mobile-calendar {
     padding: 8px 12px;
