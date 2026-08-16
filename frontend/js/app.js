@@ -55,7 +55,7 @@ function initAuth() {
   } else { showAuth(); }
 }
 function showAuth() { $('#authOverlay').style.display = 'flex'; $('#appLayout').style.display = 'none'; }
-function startApp() { $('#authOverlay').style.display = 'none'; $('#appLayout').style.display = 'flex'; if (isMobile()) { $('#mobileHeader').style.display = 'flex'; $('#mobileBottomBar').style.display = 'flex'; } $('#sidebarUser').textContent = currentUser; initCalendar(); renderPageTitle(); loadPageData(); }
+function startApp() { $('#authOverlay').style.display = 'none'; $('#appLayout').style.display = 'flex'; if (isMobile()) { $('#mobileHeader').style.display = 'flex'; $('#mobileBottomBar').style.display = 'flex'; } $('#sidebarUser').textContent = currentUser; initCalendar(); renderPageTitle(); loadProjects(); loadPageData(); }
 function logout() { token = null; currentUser = null; localStorage.removeItem('curator_v3_token'); showAuth(); }
 
 async function handleAuth(mode) {
@@ -74,6 +74,7 @@ async function handleAuth(mode) {
 // ═══ Navigation ═══
 function navigateTo(page) {
   currentPage = page;
+  closeProjectSilently();
   $$('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === page));
   $$('.mobile-tab').forEach(b => b.classList.toggle('active', b.dataset.page === page));
   loadPageData();
@@ -215,6 +216,7 @@ async function loadNotes() {
           </div>
           <div class="note-meta">
             <button class="note-fav" data-fav-note="${note.id}" title="в избранное">${note.is_favorited ? '&#9733;' : '&#9734;'}</button>
+            <button class="note-assign-btn" data-assign-note="${note.id}" data-assign-cur="${note.project_id || 0}" title="${note.project_id ? 'сменить проект' : 'в проект'}">${note.project_id ? 'проект' : 'в проект'}</button>
             <span class="note-expand-btn" data-expand-note="${note.id}" title="развернуть текст">показать текст</span>
             <span class="note-time">${time}</span>
             ${note.mood ? `<span class="note-mood">${esc(note.mood)}</span>` : ''}
@@ -586,8 +588,276 @@ async function deleteGoal(id) {
   try { await api('DELETE', '/goals/' + id); toast('удалено'); await loadGoals(); } catch (e) { toast('ошибка'); }
 }
 
+// ═══ Projects ═══
+async function loadProjects() {
+  try {
+    projectsCache = await api('GET', '/projects');
+  } catch (e) {
+    projectsCache = [];
+  }
+  renderProjects();
+}
+
+function renderProjects() {
+  const html = projectsCache.map(p =>
+    `<div class="project-item ${currentProjectId === p.id ? 'active' : ''}" data-project-id="${p.id}" title="${escAttr(p.name)}">
+      <span class="project-item-name">${esc(p.name)}</span>
+      <span class="project-item-meta">${(p.note_count || 0) + (p.msg_count || 0)}</span>
+    </div>`
+  ).join('');
+  const list = $('#projectsList');
+  const listM = $('#projectsListMobile');
+  const emptyHtml = '<div class="project-item-meta" style="padding:6px 8px">нет проектов</div>';
+  if (list) list.innerHTML = html || emptyHtml;
+  if (listM) listM.innerHTML = html || emptyHtml;
+}
+
+function showAddProjectForm() {
+  const form = $('#projectsAddForm');
+  const input = $('#projectsAddInput');
+  form.style.display = form.style.display === 'none' ? 'block' : 'none';
+  if (form.style.display === 'block') input.focus();
+}
+
+async function createProject() {
+  const input = $('#projectsAddInput');
+  const name = input.value.trim();
+  input.value = '';
+  $('#projectsAddForm').style.display = 'none';
+  if (!name) return;
+  try {
+    const p = await api('POST', '/projects', { name });
+    projectsCache.push(p);
+    renderProjects();
+    toast('проект создан');
+    openProject(p.id);
+  } catch (e) { toast(e.message || 'ошибка'); }
+}
+
+function closeProjectSilently() {
+  currentProjectId = null;
+  $('#projectSection').classList.remove('active');
+  renderProjects();
+  if (isMobile()) {
+    $('#mobileHeader').style.display = 'flex';
+    $('#mobileBottomBar').style.display = 'flex';
+  }
+}
+
+function openProject(id) {
+  currentProjectId = id;
+  hideAllSections();
+  $('#projectSection').classList.add('active');
+  renderProjects();
+  if (isMobile()) {
+    $('#mobileHeader').style.display = 'none';
+    $('#mobileBottomBar').style.display = 'none';
+  }
+  loadProjectDetail();
+}
+
+function closeProject() {
+  closeProjectSilently();
+  navigateTo('notes');
+}
+
+async function loadProjectDetail() {
+  if (!currentProjectId) return;
+  const p = await api('GET', '/projects/' + currentProjectId).catch(() => null);
+  if (!p) { toast('проект не найден'); closeProject(); return; }
+  $('#projectTitleInput').value = p.name;
+  $('#projectTitleInput').disabled = true;
+  renderProjectNotes(p.notes);
+  renderProjectChat(p.messages);
+}
+
+function renderProjectNotes(notes) {
+  const list = $('#projectNotesList');
+  const empty = $('#projectNotesEmpty');
+  const countEl = $('#projectMaterialsCount');
+  if (countEl) countEl.textContent = notes.length ? notes.length + ' записей' : '';
+  if (!notes.length) {
+    list.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  list.innerHTML = notes.map(n => {
+    const title = noteTitle(n);
+    const summary = (n.ai_summary || n.content || '').slice(0, 200);
+    return `<div class="project-note" data-pnote-id="${n.id}">
+      <div class="project-note-title">${esc(title)}</div>
+      <div class="project-note-summary">${esc(summary)}</div>
+      <div class="project-note-meta">
+        <span class="project-note-date">${esc(fmtDate(n.note_date))}</span>
+        <div class="project-note-actions">
+          <button class="project-note-btn" data-pnote-discuss="${n.id}" data-pnote-text="${escAttr(n.content)}" title="обсудить с куратором">обсудить</button>
+          <button class="project-note-btn" data-pnote-unassign="${n.id}" title="убрать из проекта">убрать</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function reloadProjectNotes() {
+  if (!currentProjectId) return;
+  const p = await api('GET', '/projects/' + currentProjectId).catch(() => null);
+  if (p) renderProjectNotes(p.notes);
+}
+
+async function saveProjectNote() {
+  const input = $('#projectNoteInput');
+  const content = input.value.trim();
+  if (!content || !currentProjectId) return;
+  try {
+    await api('POST', '/notes', { content, note_date: todayStr(), tags: [], mood: '', project_id: currentProjectId });
+    input.value = '';
+    toast('в материалы проекта');
+    await reloadProjectNotes();
+    loadProjects();
+  } catch (e) { toast(e.message || 'ошибка'); }
+}
+
+function unassignProjectNote(noteId) {
+  api('PUT', '/notes/' + noteId, { project_id: 0 }).then(() => {
+    toast('убрано из проекта');
+    reloadProjectNotes();
+    loadProjects();
+  }).catch(() => toast('ошибка'));
+}
+
+function renderProjectChat(messages) {
+  const el = $('#projectChatMessages');
+  if (!messages.length) {
+    el.innerHTML = '<div class="chat-msg ai">диалог проекта пуст. спроси меня про материалы или расскажи, что хочешь проработать.</div>';
+    return;
+  }
+  el.innerHTML = messages.map(m => chatMsgHtml(m.role === 'assistant' ? 'ai' : 'user', m.content)).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+async function sendProjectChat() {
+  const input = $('#projectChatInput');
+  const msg = input.value.trim();
+  if (!msg || !currentProjectId) return;
+  const messagesEl = $('#projectChatMessages');
+  messagesEl.innerHTML += `<div class="chat-msg user">${esc(msg)}</div>`;
+  input.value = '';
+  messagesEl.innerHTML += `<div class="chat-msg ai" id="projectChatLoading"><div class="ai-dot"></div> думаю...</div>`;
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  try {
+    const result = await api('POST', '/ai/chat', { message: msg, project_id: currentProjectId });
+    const loadingEl = $('#projectChatLoading'); if (loadingEl) loadingEl.remove();
+    const parsed = parseChatReply(result.reply);
+    messagesEl.innerHTML += chatMsgHtml('ai', parsed.text);
+    if (result.saved && result.saved.text) {
+      messagesEl.innerHTML += `<div class="chat-auto-saved">куратор сохранил это в материалы проекта</div>`;
+    }
+    if (result.note_refs && result.note_refs.length) {
+      const refs = result.note_refs.map(n =>
+        `<button class="chat-note-ref" data-note-id="${n.id}" data-note-content="${escAttr(n.content)}" data-note-date="${escAttr(n.note_date)}" data-note-title="${escAttr(noteTitle(n))}">` +
+          `<span class="chat-note-ref-title">${esc(noteTitle(n))}</span>` +
+          `<span class="chat-note-ref-date">${esc(fmtDate(n.note_date))}</span>` +
+        `</button>`
+      ).join('');
+      messagesEl.innerHTML += `<div class="chat-note-refs"><div class="chat-note-refs-label">куратор ссылается на материалы проекта — нажми, чтобы прочитать</div>${refs}</div>`;
+    }
+    loadProjects();
+    await reloadProjectNotes();
+  } catch (e) {
+    const loadingEl = $('#projectChatLoading'); if (loadingEl) loadingEl.remove();
+    messagesEl.innerHTML += `<div class="chat-msg ai">ошибка соединения</div>`;
+  }
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function startRenameProject() {
+  const input = $('#projectTitleInput');
+  input.disabled = false;
+  input.focus();
+  input.select();
+}
+
+async function saveProjectName() {
+  const input = $('#projectTitleInput');
+  if (!currentProjectId) return;
+  const name = input.value.trim();
+  if (!name) { input.disabled = true; return; }
+  input.disabled = true;
+  const prev = projectsCache.find(p => p.id === currentProjectId);
+  if (prev && name !== prev.name) {
+    try {
+      await api('PUT', '/projects/' + currentProjectId, { name });
+      toast('переименовано');
+    } catch (e) { toast('ошибка'); }
+  }
+  loadProjects();
+}
+
+async function deleteProject() {
+  if (!currentProjectId) return;
+  const name = $('#projectTitleInput').value.trim();
+  if (!confirm('удалить проект «' + name + '»? заметки останутся, диалог проекта удалится')) return;
+  try {
+    await api('DELETE', '/projects/' + currentProjectId);
+    toast('проект удалён');
+    closeProject();
+    loadProjects();
+  } catch (e) { toast('ошибка'); }
+}
+
+// ═══ Assign note to project ═══
+let assignNoteId = null;
+
+function closeAssignModal() {
+  assignNoteId = null;
+  $('#assignModal').style.display = 'none';
+}
+
+async function openAssignModal(noteId, curProjectId) {
+  assignNoteId = noteId;
+  const modal = $('#assignModal');
+  const list = $('#assignModalList');
+  const empty = $('#assignModalEmpty');
+  try {
+    if (!projectsCache.length) projectsCache = await api('GET', '/projects');
+  } catch (e) { projectsCache = []; }
+  if (!projectsCache.length && !curProjectId) {
+    list.innerHTML = '';
+    empty.style.display = 'block';
+  } else {
+    empty.style.display = 'none';
+    const unassignHtml = curProjectId
+      ? `<button class="assign-project-btn active" data-assign-project="0">
+          <span class="assign-name">убрать из проекта</span>
+          <span class="assign-count"></span>
+        </button>`
+      : '';
+    list.innerHTML = unassignHtml + projectsCache.map(p =>
+      `<button class="assign-project-btn ${curProjectId === p.id ? 'active' : ''}" data-assign-project="${p.id}">
+        <span class="assign-name">${esc(p.name)}</span>
+        <span class="assign-count">${(p.note_count || 0)} записей</span>
+      </button>`
+    ).join('');
+  }
+  modal.style.display = 'flex';
+}
+
+async function assignNoteToProject(projectId) {
+  if (!assignNoteId) return;
+  try {
+    await api('PUT', '/notes/' + assignNoteId, { project_id: projectId });
+    toast('заметка в проекте');
+  } catch (e) { toast(e.message || 'ошибка'); }
+  closeAssignModal();
+  loadNotes();
+  loadProjects();
+}
+
 // ═══ Chat ═══
 let currentSessionId = null;
+let currentProjectId = null;
+let projectsCache = [];
 
 function showChat() {
   hideAllSections();
@@ -884,6 +1154,7 @@ function hideAllSections() {
   $('#chatSection').classList.remove('active');
   $('#tiktokSection').style.display = 'none';
   $('#archivePanel').style.display = 'none';
+  $('#projectSection').classList.remove('active');
 }
 
 function autoResize() { const i = $('#noteInput'); i.style.height = 'auto'; i.style.height = Math.min(i.scrollHeight, 200) + 'px'; }
@@ -1076,6 +1347,8 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#notesSection').addEventListener('click', e => {
     const fav = e.target.closest('[data-fav-note]');
     if (fav) { toggleNoteFavorite(parseInt(fav.dataset.favNote)); return; }
+    const assign = e.target.closest('[data-assign-note]');
+    if (assign) { openAssignModal(parseInt(assign.dataset.assignNote), parseInt(assign.dataset.assignCur || 0)); return; }
     const del = e.target.closest('[data-id]');
     if (del) { deleteNote(parseInt(del.dataset.id)); return; }
     const edit = e.target.closest('[data-edit-note]');
@@ -1194,6 +1467,68 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Selection toolbar
   initSelectionToolbar();
+
+  // Projects
+  $('#projectsAdd').addEventListener('click', showAddProjectForm);
+  $('#projectsAddInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') createProject();
+    if (e.key === 'Escape') { $('#projectsAddForm').style.display = 'none'; }
+  });
+  $('#projectsAddMobile').addEventListener('click', () => {
+    const form = $('#projectsAddFormMobile');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    if (form.style.display === 'block') $('#projectsAddInputMobile').focus();
+  });
+  $('#projectsAddInputMobile').addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      const name = $('#projectsAddInputMobile').value.trim();
+      $('#projectsAddInputMobile').value = '';
+      $('#projectsAddFormMobile').style.display = 'none';
+      if (name) {
+        api('POST', '/projects', { name }).then(p => {
+          projectsCache.push(p); renderProjects(); toast('проект создан'); openProject(p.id);
+        }).catch(() => toast('ошибка'));
+      }
+    }
+  });
+  $('#projectsList').addEventListener('click', e => { const it = e.target.closest('[data-project-id]'); if (it) openProject(parseInt(it.dataset.projectId)); });
+  $('#projectsListMobile').addEventListener('click', e => { const it = e.target.closest('[data-project-id]'); if (it) { closeDrawer(); openProject(parseInt(it.dataset.projectId)); } });
+
+  // Project screen
+  $('#projectBackBtn').addEventListener('click', closeProject);
+  $('#projectRenameBtn').addEventListener('click', startRenameProject);
+  $('#projectTitleInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') saveProjectName();
+    if (e.key === 'Escape') { $('#projectTitleInput').disabled = true; loadProjects(); }
+  });
+  $('#projectTitleInput').addEventListener('blur', saveProjectName);
+  $('#projectDeleteBtn').addEventListener('click', deleteProject);
+  $('#projectNoteSave').addEventListener('click', saveProjectNote);
+  $('#projectNoteInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveProjectNote(); } });
+  $('#projectChatSend').addEventListener('click', sendProjectChat);
+  $('#projectChatInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendProjectChat(); } });
+  $('#projectNotesList').addEventListener('click', e => {
+    const unassign = e.target.closest('[data-pnote-unassign]');
+    if (unassign) { unassignProjectNote(parseInt(unassign.dataset.pnoteUnassign)); return; }
+    const discuss = e.target.closest('[data-pnote-discuss]');
+    if (discuss) {
+      $('#chatInput').value = 'Расскажи подробнее об этой мысли: "' + (discuss.dataset.pnoteText || '').slice(0, 200) + '"';
+      closeProject();
+      setTimeout(() => $('#chatInput').focus(), 100);
+    }
+  });
+  $('#projectChatMessages').addEventListener('click', e => {
+    const ref = e.target.closest('.chat-note-ref');
+    if (ref) openNoteModal({ id: ref.dataset.noteId, content: ref.dataset.noteContent, date: ref.dataset.noteDate, title: ref.dataset.noteTitle });
+  });
+
+  // Assign note to project
+  $('#assignModalCancel').addEventListener('click', closeAssignModal);
+  $('#assignModal').addEventListener('click', e => { if (e.target === $('#assignModal')) closeAssignModal(); });
+  $('#assignModalList').addEventListener('click', e => {
+    const btn = e.target.closest('[data-assign-project]');
+    if (btn) assignNoteToProject(parseInt(btn.dataset.assignProject));
+  });
 
   // Keyboard shortcuts
   document.addEventListener('keydown', e => {

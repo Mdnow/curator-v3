@@ -65,7 +65,11 @@ def _extract_note_refs(text: str) -> list[int]:
 
 
 async def _save_note(
-    db, user_id: int, text: str, background: BackgroundTasks | None = None
+    db,
+    user_id: int,
+    text: str,
+    background: BackgroundTasks | None = None,
+    project_id: int | None = None,
 ) -> dict:
     """Сохранить текст как заметку «Цитаты».
 
@@ -76,13 +80,14 @@ async def _save_note(
     today = datetime.now().date().isoformat()
     enc = encrypt(text)
     row = await db.fetchrow(
-        """INSERT INTO notes (user_id, content_encrypted, note_date, tags, ai_category)
-           VALUES ($1,$2,$3,$4,$5) RETURNING id""",
+        """INSERT INTO notes (user_id, content_encrypted, note_date, tags, ai_category, project_id)
+           VALUES ($1,$2,$3,$4,$5,$6) RETURNING id""",
         user_id,
         enc,
         today,
         "[]",
         "Цитаты",
+        project_id,
     )
     if background is not None:
         from backend.routes.notes import _analyze_in_background
@@ -108,7 +113,19 @@ async def ai_chat(
     req: ChatReq, background: BackgroundTasks, user_id: int = Depends(get_current_user)
 ):
     async with get_db() as db:
-        if req.session_id is not None:
+        # Диалог проекта: постоянный (без правила «2 часа»), фильтр по project_id.
+        project_id = None
+        session_id = None
+        if req.project_id is not None:
+            owner = await db.fetchrow(
+                "SELECT id FROM projects WHERE id=$1 AND user_id=$2",
+                req.project_id,
+                user_id,
+            )
+            if not owner:
+                raise HTTPException(404, "проект не найден")
+            project_id = req.project_id
+        elif req.session_id is not None:
             owner = await db.fetchrow(
                 "SELECT id FROM chat_history WHERE user_id=$1 AND session_id=$2 LIMIT 1",
                 user_id,
@@ -136,32 +153,54 @@ async def ai_chat(
                 except Exception:
                     session_id = (last_row["session_id"] or 0) + 1
 
-        await db.execute(
-            """INSERT INTO chat_history (user_id, role, content, session_id)
-               VALUES ($1,$2,$3,$4)""",
-            user_id,
-            "user",
-            req.message,
-            session_id,
-        )
+        if project_id is not None:
+            await db.execute(
+                """INSERT INTO chat_history (user_id, role, content, project_id)
+                   VALUES ($1,$2,$3,$4)""",
+                user_id,
+                "user",
+                req.message,
+                project_id,
+            )
+        else:
+            await db.execute(
+                """INSERT INTO chat_history (user_id, role, content, session_id)
+                   VALUES ($1,$2,$3,$4)""",
+                user_id,
+                "user",
+                req.message,
+                session_id,
+            )
 
-        all_rows = await db.fetch(
-            """SELECT role, content FROM chat_history
-               WHERE user_id=$1 AND session_id=$2
-               ORDER BY created_at DESC LIMIT 40""",
-            user_id,
-            session_id,
-        )
+        if project_id is not None:
+            all_rows = await db.fetch(
+                """SELECT role, content FROM chat_history
+                   WHERE user_id=$1 AND project_id=$2
+                   ORDER BY created_at DESC LIMIT 40""",
+                user_id,
+                project_id,
+            )
+        else:
+            all_rows = await db.fetch(
+                """SELECT role, content FROM chat_history
+                   WHERE user_id=$1 AND session_id=$2
+                   ORDER BY created_at DESC LIMIT 40""",
+                user_id,
+                session_id,
+            )
         history = []
         for r in reversed(all_rows):
             history.append({"role": r["role"], "content": r["content"]})
 
+        # В контексте куратора — материалы проекта, если диалог внутри проекта.
         note_rows = await db.fetch(
             """SELECT id, content_encrypted, note_date, is_favorited, ai_summary,
                       ai_category
                FROM notes WHERE user_id=$1
+               AND ($2::int IS NULL OR project_id=$2)
                ORDER BY created_at DESC LIMIT 30""",
             user_id,
+            project_id,
         )
         notes = []
         fav_notes = []
@@ -258,16 +297,32 @@ async def ai_chat(
             thought_text = save_match.group(1).strip()
             result = _SAVE_RE.sub("", result).strip()
             if thought_text and _has_save_intent(req.message):
-                saved = await _save_note(db, user_id, thought_text, background)
+                saved = await _save_note(
+                    db, user_id, thought_text, background, project_id
+                )
 
-        await db.execute(
-            """INSERT INTO chat_history (user_id, role, content, session_id)
-               VALUES ($1,$2,$3,$4)""",
-            user_id,
-            "assistant",
-            result,
-            session_id,
-        )
+        if project_id is not None:
+            await db.execute(
+                """INSERT INTO chat_history (user_id, role, content, project_id)
+                   VALUES ($1,$2,$3,$4)""",
+                user_id,
+                "assistant",
+                result,
+                project_id,
+            )
+            await db.execute(
+                "UPDATE projects SET updated_at=CURRENT_TIMESTAMP WHERE id=$1",
+                project_id,
+            )
+        else:
+            await db.execute(
+                """INSERT INTO chat_history (user_id, role, content, session_id)
+                   VALUES ($1,$2,$3,$4)""",
+                user_id,
+                "assistant",
+                result,
+                session_id,
+            )
 
         return {
             "reply": result,
@@ -275,6 +330,7 @@ async def ai_chat(
             "saved": saved,
             "note_refs": note_refs,
             "session_id": session_id,
+            "project_id": project_id,
         }
 
 

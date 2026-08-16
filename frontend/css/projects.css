@@ -1,0 +1,151 @@
+/* ═══════════════════════════════════════════
+   КУРАТОР v3 — Проекты
+   Контейнеры: имя + диалог + материалы (заметки)
+   ═══════════════════════════════════════════ */
+
+/* ── Список проектов в сайдбаре ── */
+.projects-sidebar {
+  display: flex; flex-direction: column; gap: var(--space-sm);
+}
+.projects-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: var(--space-sm);
+}
+.projects-title {
+  font-size: var(--font-xs); color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.projects-add-btn { padding: 2px 8px; font-size: var(--font-sm); }
+.projects-add-form input {
+  width: 100%; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 8px var(--space-sm); color: var(--text-1);
+  font-size: var(--font-sm); outline: none; transition: border-color 0.2s;
+}
+.projects-add-form input:focus { border-color: var(--border-focus); }
+.projects-list {
+  display: flex; flex-direction: column; gap: var(--space-xs);
+  max-height: 240px; overflow-y: auto;
+}
+.project-item {
+  display: flex; align-items: center; gap: var(--space-sm);
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 2px solid transparent; border-radius: var(--radius-sm);
+  padding: 8px var(--space-sm); cursor: pointer; text-align: left;
+  transition: all 0.15s;
+}
+.project-item:hover { background: var(--surface-hover); }
+.project-item.active { border-left-color: var(--accent); background: var(--accent-bg); }
+.project-item-name {
+  flex: 1; font-size: var(--font-sm); color: var(--text-1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.project-item-meta { font-size: var(--font-xs); color: var(--text-3); white-space: nowrap; }
+
+/* ── Экран проекта ── */
+.project-section { display: none; flex-direction: column; height: calc(100vh - 120px); }
+.project-section.active { display: flex; }
+
+.project-topbar {
+  display: flex; align-items: center; gap: var(--space-sm);
+  padding: var(--space-sm) 0; border-bottom: 1px solid var(--border);
+  margin-bottom: var(--space-sm);
+}
+.project-title-input {
+  flex: 1; min-width: 0; background: transparent; border: 1px solid transparent;
+  border-radius: var(--radius-sm); color: var(--text-1); font-size: var(--font-lg);
+  font-weight: 300; padding: 4px 8px; outline: none; transition: border-color 0.2s;
+}
+.project-title-input:not(:disabled) {
+  border-color: var(--border-focus); background: var(--surface);
+}
+.project-delete-btn { color: var(--danger); }
+
+/* ── Материалы проекта ── */
+.project-materials {
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: var(--space-md); background: var(--surface);
+  margin-bottom: var(--space-md); max-height: 45%; overflow-y: auto;
+  flex-shrink: 0;
+}
+.project-materials-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: var(--space-sm);
+}
+.project-materials-label {
+  font-size: var(--font-xs); color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.project-materials-count { font-size: var(--font-xs); color: var(--text-3); }
+.project-note-input-row {
+  display: flex; gap: var(--space-sm); align-items: flex-end;
+  margin-bottom: var(--space-sm);
+}
+.project-note-input-row .note-input { flex: 1; }
+
+.project-notes { display: flex; flex-direction: column; gap: var(--space-sm); }
+.project-note {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md); background: var(--bg-alt);
+}
+.project-note-title { font-size: var(--font-sm); color: var(--text-2); font-weight: 400; }
+.project-note-summary {
+  font-size: var(--font-sm); color: var(--text-3); margin-top: 2px;
+  white-space: pre-wrap;
+}
+.project-note-meta {
+  display: flex; align-items: center; gap: var(--space-sm); margin-top: var(--space-xs);
+  font-size: var(--font-xs); color: var(--text-3);
+}
+.project-note-date { white-space: nowrap; }
+.project-note-actions { margin-left: auto; display: flex; gap: var(--space-xs); }
+.project-note-btn {
+  background: transparent; border: none; color: var(--text-3);
+  font-size: var(--font-xs); cursor: pointer; padding: 2px 6px; border-radius: var(--radius-xs);
+  transition: all 0.15s;
+}
+.project-note-btn:hover { background: var(--surface-hover); color: var(--text-2); }
+.project-notes-empty {
+  padding: var(--space-md); text-align: center; color: var(--text-3);
+}
+
+/* ── Чат проекта ── */
+.project-chat { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.project-chat-title {
+  font-size: var(--font-xs); color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: var(--space-xs);
+}
+.project-chat-messages { flex: 1; overflow-y: auto; min-height: 0; }
+
+/* ── Назначение заметки в проект ── */
+.assign-modal {
+  position: fixed; inset: 0; z-index: 3000;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(43,39,34,0.35);
+}
+.assign-modal-card {
+  width: 100%; max-width: 340px; max-height: 60vh; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: var(--space-md);
+  display: flex; flex-direction: column; gap: var(--space-sm);
+}
+.assign-modal-title {
+  font-size: var(--font-sm); color: var(--text-2);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.assign-modal-list { display: flex; flex-direction: column; gap: var(--space-xs); }
+.assign-project-btn {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm);
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 10px var(--space-md); cursor: pointer; text-align: left;
+  color: var(--text-1); font-size: var(--font-sm); transition: all 0.15s;
+}
+.assign-project-btn:hover { background: var(--accent-bg); border-color: var(--accent-hover); }
+.assign-project-btn .assign-count { font-size: var(--font-xs); color: var(--text-3); }
+.assign-project-btn.active { background: var(--accent-bg); border-color: var(--accent); }
+.assign-modal-empty { font-size: var(--font-xs); color: var(--text-3); }
+.assign-modal-cancel {
+  background: transparent; border: none; color: var(--text-3);
+  font-size: var(--font-sm); cursor: pointer; padding: var(--space-sm);
+  border-radius: var(--radius-xs); transition: all 0.15s;
+}
+.assign-modal-cancel:hover { background: var(--surface-hover); color: var(--text-2); }

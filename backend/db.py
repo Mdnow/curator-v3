@@ -252,3 +252,33 @@ async def init_db():
         await db.execute(
             "CREATE INDEX IF NOT EXISTS idx_chat_user ON chat_history(user_id, created_at)"
         )
+
+        # Projects — контейнеры: имя + свой диалог + привязанные заметки (материалы)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS projects (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                name TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id, updated_at)"
+        )
+        # Связь заметок с проектом (материалы). Удаление проекта не удаляет заметки —
+        # только снимает привязку (SET NULL).
+        await db.execute(
+            "ALTER TABLE notes ADD COLUMN IF NOT EXISTS project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL"
+        )
+        # Диалог проекта живёт в chat_history, project_id — фильтр диалога.
+        # При удалении проекта его диалог удаляется (CASCADE).
+        await db.execute(
+            "ALTER TABLE chat_history ADD COLUMN IF NOT EXISTS project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE"
+        )
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_notes_project ON notes(user_id, project_id)"
+        )
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chat_project ON chat_history(user_id, project_id)"
+        )

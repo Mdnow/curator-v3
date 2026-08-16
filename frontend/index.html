@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="/css/chat.css?v=7">
   <link rel="stylesheet" href="/css/patterns.css?v=6">
   <link rel="stylesheet" href="/css/tiktok.css?v=1">
+  <link rel="stylesheet" href="/css/projects.css?v=1">
   <link rel="stylesheet" href="/css/animations.css?v=6">
   <link rel="stylesheet" href="/css/mobile.css?v=7">
 </head>
@@ -71,6 +72,17 @@
       <button class="drawer-btn btn-reanalyze-mobile">
         <span class="drawer-btn-icon">♻</span> переанализ заметок
       </button>
+    </div>
+
+    <div class="drawer-section">
+      <div class="drawer-section-title">проекты</div>
+      <button class="drawer-btn projects-add-mobile" id="projectsAddMobile">
+        <span class="drawer-btn-icon">+</span> новый проект
+      </button>
+      <div class="projects-add-form" id="projectsAddFormMobile" style="display:none">
+        <input type="text" id="projectsAddInputMobile" placeholder="название проекта" autocomplete="off" maxlength="200">
+      </div>
+      <div class="projects-list projects-list-mobile" id="projectsListMobile"></div>
     </div>
 
     <div class="drawer-user" id="sidebarUser"></div>
@@ -140,6 +152,17 @@
           <span class="nav-icon">&#9654;</span> Тикток
         </button>
       </nav>
+
+      <div class="projects-sidebar">
+        <div class="projects-header">
+          <span class="projects-title">проекты</span>
+          <button class="btn btn-icon projects-add-btn" id="projectsAdd" title="новый проект">&#10010;</button>
+        </div>
+        <div class="projects-add-form" id="projectsAddForm" style="display:none">
+          <input type="text" id="projectsAddInput" placeholder="название проекта" autocomplete="off" maxlength="200">
+        </div>
+        <div class="projects-list" id="projectsList"></div>
+      </div>
 
       <button class="btn btn-small" id="btnToday">Сегодня</button>
 
@@ -286,6 +309,43 @@
         </div>
       </div>
 
+      <!-- Project -->
+      <div class="project-section" id="projectSection">
+        <div class="project-topbar">
+          <button class="btn btn-icon project-back-btn" id="projectBackBtn" title="назад">&#8592;</button>
+          <input type="text" class="project-title-input" id="projectTitleInput" maxlength="200" disabled>
+          <button class="btn btn-icon" id="projectRenameBtn" title="переименовать">&#9998;</button>
+          <button class="btn btn-icon project-delete-btn" id="projectDeleteBtn" title="удалить проект">&#10005;</button>
+        </div>
+
+        <div class="project-materials">
+          <div class="project-materials-head">
+            <span class="project-materials-label">материалы</span>
+            <span class="project-materials-count" id="projectMaterialsCount"></span>
+          </div>
+          <div class="project-note-input-row">
+            <textarea class="note-input" id="projectNoteInput" placeholder="новая заметка в проект..." rows="1"></textarea>
+            <button class="btn btn-small" id="projectNoteSave">В ПРОЕКТ</button>
+          </div>
+          <div class="project-notes" id="projectNotesList"></div>
+          <div class="project-notes-empty" id="projectNotesEmpty" style="display:none">
+            <div class="empty-icon">&#9671;</div>
+            <div class="empty-text">материалов пока нет — добавь заметку здесь или назначь существующую из «Заметок»</div>
+          </div>
+        </div>
+
+        <div class="project-chat">
+          <div class="project-chat-title">диалог проекта</div>
+          <div class="chat-messages project-chat-messages" id="projectChatMessages">
+            <div class="chat-msg ai">диалог проекта пуст. спроси меня про материалы или расскажи, что хочешь проработать.</div>
+          </div>
+          <div class="chat-input-row">
+            <input type="text" class="chat-input" id="projectChatInput" placeholder="спроси куратора про материалы...">
+            <button class="btn" id="projectChatSend">&#10148;</button>
+          </div>
+        </div>
+      </div>
+
     </main>
   </div>
 
@@ -314,6 +374,17 @@
       <div class="note-modal-footer">
         <button class="btn btn-primary" id="noteModalOpenBtn">открыть в заметках</button>
       </div>
+    </div>
+  </div>
+
+  <div class="assign-modal" id="assignModal" style="display:none">
+    <div class="assign-modal-card">
+      <div class="assign-modal-title">в какой проект?</div>
+      <div class="assign-modal-list" id="assignModalList"></div>
+      <div class="assign-modal-empty" id="assignModalEmpty" style="display:none">
+        <span class="empty-text">проектов нет — создай в сайдбаре</span>
+      </div>
+      <button class="assign-modal-cancel" id="assignModalCancel">отмена</button>
     </div>
   </div>
 

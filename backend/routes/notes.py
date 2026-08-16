@@ -96,7 +96,7 @@ async def get_notes(
         rows = await db.fetch(
             """SELECT id, content_encrypted, note_date, tags, is_favorited,
                       ai_title, ai_summary, ai_category, ai_sentiment, ai_keyphrases, ai_theses,
-                      thread_id, mood, created_at, updated_at
+                      thread_id, mood, project_id, created_at, updated_at
                FROM notes WHERE user_id=$1 AND note_date=$2
                ORDER BY created_at DESC LIMIT $3 OFFSET $4""",
             user_id,
@@ -145,6 +145,7 @@ async def get_notes(
                     "ai_theses": theses,
                     "thread_id": r["thread_id"] or "",
                     "mood": r["mood"] or "",
+                    "project_id": r["project_id"],
                     "created_at": str(r["created_at"]) if r["created_at"] else "",
                     "updated_at": str(r["updated_at"]) if r["updated_at"] else "",
                 }
@@ -152,21 +153,35 @@ async def get_notes(
         return notes
 
 
+async def _validate_project(db, project_id, user_id):
+    """Проект должен принадлежать пользователю, иначе 404."""
+    if project_id is None:
+        return None
+    row = await db.fetchrow(
+        "SELECT id FROM projects WHERE id=$1 AND user_id=$2", project_id, user_id
+    )
+    if not row:
+        raise HTTPException(404, "проект не найден")
+    return project_id
+
+
 @router.post("")
 async def create_note(
     req: NoteReq, bg: BackgroundTasks, user_id: int = Depends(get_current_user)
 ):
     async with get_db() as db:
+        project_id = await _validate_project(db, req.project_id, user_id)
         enc = encrypt(req.content)
         tags_json = json.dumps(req.tags)
         row = await db.fetchrow(
-            """INSERT INTO notes (user_id, content_encrypted, note_date, tags, mood)
-               VALUES ($1,$2,$3,$4,$5) RETURNING id""",
+            """INSERT INTO notes (user_id, content_encrypted, note_date, tags, mood, project_id)
+               VALUES ($1,$2,$3,$4,$5,$6) RETURNING id""",
             user_id,
             enc,
             req.note_date,
             tags_json,
             req.mood or "",
+            project_id,
         )
         note_id = row["id"]
 
@@ -305,6 +320,17 @@ async def update_note(
             updates.append(f"mood=${idx}")
             params.append(req.mood)
             idx += 1
+        if req.project_id is not None:
+            # 0 — снять привязку к проекту; иначе — валидируем и привязываем.
+            if req.project_id == 0:
+                updates.append(f"project_id=${idx}")
+                params.append(None)
+                idx += 1
+            else:
+                pid = await _validate_project(db, req.project_id, user_id)
+                updates.append(f"project_id=${idx}")
+                params.append(pid)
+                idx += 1
         if not updates:
             return {"ok": True}
         updates.append("updated_at=CURRENT_TIMESTAMP")
