@@ -388,6 +388,13 @@
     padding: 6px 10px;
   }
 
+  .goal-archive, .goal-delete, .goal-activate, .task-delete {
+    opacity: 1;
+  }
+
+  .goal-archive, .goal-delete, .task-delete { font-size: 15px; padding: 6px 10px; }
+  .goal-activate { padding: 6px 10px; }
+
   .note-ai {
     padding: 10px 12px;
     border-radius: var(--radius-sm);

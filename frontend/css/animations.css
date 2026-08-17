@@ -18,3 +18,13 @@
   0%, 100% { opacity: 0.3; }
   50% { opacity: 0.6; }
 }
+@keyframes starPop {
+  0% { transform: scale(0.4); }
+  55% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+.removing {
+  opacity: 0 !important;
+  transform: scale(0.96);
+  transition: opacity 0.18s ease, transform 0.18s ease !important;
+}

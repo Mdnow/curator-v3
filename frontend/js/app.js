@@ -35,6 +35,24 @@ function fmtDate(iso) {
 }
 function toast(msg) { const el = $('#toast'); el.textContent = msg; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2000); }
 function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+function setStar(btn, on) {
+  if (!btn) return;
+  btn.innerHTML = on ? '&#9733;' : '&#9734;';
+  if (on) {
+    btn.classList.remove('pop');
+    void btn.offsetWidth;
+    btn.classList.add('pop');
+  } else { btn.classList.remove('pop'); }
+}
+function removeCard(card) {
+  if (!card) return;
+  card.classList.add('removing');
+  setTimeout(() => card.remove(), 180);
+}
+function removeCardOf(selector) {
+  const el = document.querySelector(selector);
+  if (el) removeCard(el.closest('.task-card, .goal-card') || el);
+}
 
 // ═══ API ═══
 async function api(method, path, body) {
@@ -311,8 +329,27 @@ async function saveNote() {
   saveBtn.textContent = 'СОХРАНИТЬ'; saveBtn.disabled = false; aiStatus.classList.remove('active');
 }
 
-async function toggleNoteFavorite(id) { try { const r = await api('POST', '/notes/' + id + '/favorite'); toast(r.is_favorited ? 'в избранном' : 'убрано'); await loadNotes(); } catch (e) { toast('ошибка'); } }
-async function deleteNote(id) { try { await api('DELETE', '/notes/' + id); toast('удалено'); await loadNotes(); } catch (e) { toast('ошибка'); } }
+async function toggleNoteFavorite(id) {
+  const card = document.querySelector(`.note-card[data-note-id="${id}"]`);
+  if (!card) return;
+  const btn = card.querySelector('.note-fav');
+  const wasFav = card.classList.contains('favorited');
+  setStar(btn, !wasFav);
+  card.classList.toggle('favorited', !wasFav);
+  try {
+    const r = await api('POST', '/notes/' + id + '/favorite');
+    if (r.is_favorited !== !wasFav) { setStar(btn, r.is_favorited); card.classList.toggle('favorited', r.is_favorited); }
+    toast(r.is_favorited ? 'в избранном' : 'убрано');
+  } catch (e) {
+    setStar(btn, wasFav); card.classList.toggle('favorited', wasFav);
+    toast('ошибка');
+  }
+}
+async function deleteNote(id) {
+  removeCard(document.querySelector(`.note-card[data-note-id="${id}"]`));
+  try { await api('DELETE', '/notes/' + id); toast('удалено'); }
+  catch (e) { toast('ошибка'); await loadNotes(); }
+}
 
 // ═══ Edit Note ═══
 let editingNoteId = null;
@@ -497,9 +534,42 @@ async function createTask() {
   } catch (e) { toast('ошибка'); }
 }
 
-async function toggleTask(id) { try { const tasks = await api('GET', '/tasks?date=' + selectedDate); const task = tasks.find(t => t.id === id); if (task) { await api('PUT', '/tasks/' + id, { completed: task.completed ? 0 : 1 }); await loadTasks(); } } catch (e) {} }
-async function deleteTask(id) { try { await api('DELETE', '/tasks/' + id); toast('удалено'); await loadTasks(); } catch (e) {} }
-async function toggleTaskFavorite(id) { try { const r = await api('POST', '/tasks/' + id + '/favorite'); toast(r.is_favorited ? 'в избранном' : 'убрано'); await loadTasks(); } catch (e) { toast('ошибка'); } }
+async function toggleTask(id) {
+  const check = document.querySelector(`[data-task-id="${id}"]`);
+  if (!check) return;
+  const card = check.closest('.task-card');
+  const wasDone = check.classList.contains('checked');
+  check.classList.toggle('checked', !wasDone);
+  if (card) card.classList.toggle('completed', !wasDone);
+  try {
+    await api('PUT', '/tasks/' + id, { completed: wasDone ? 0 : 1 });
+  } catch (e) {
+    check.classList.toggle('checked', wasDone);
+    if (card) card.classList.toggle('completed', wasDone);
+    toast('ошибка');
+  }
+}
+async function deleteTask(id) {
+  removeCardOf(`[data-task-delete="${id}"]`);
+  try { await api('DELETE', '/tasks/' + id); toast('удалено'); }
+  catch (e) { toast('ошибка'); await loadTasks(); }
+}
+async function toggleTaskFavorite(id) {
+  const btn = document.querySelector(`[data-fav-task="${id}"]`);
+  if (!btn) return;
+  const card = btn.closest('.task-card');
+  const wasFav = card.classList.contains('favorited');
+  setStar(btn, !wasFav);
+  if (card) card.classList.toggle('favorited', !wasFav);
+  try {
+    const r = await api('POST', '/tasks/' + id + '/favorite');
+    if (r.is_favorited !== !wasFav) { setStar(btn, r.is_favorited); if (card) card.classList.toggle('favorited', r.is_favorited); }
+    toast(r.is_favorited ? 'в избранном' : 'убрано');
+  } catch (e) {
+    setStar(btn, wasFav); if (card) card.classList.toggle('favorited', wasFav);
+    toast('ошибка');
+  }
+}
 
 // ═══ Goals ═══
 async function loadGoals() {
@@ -589,16 +659,34 @@ async function generateGoals() {
 }
 
 async function toggleGoalPin(id) {
-  try { await api('POST', '/goals/' + id + '/pin'); await loadGoals(); } catch (e) { toast('ошибка'); }
+  const btn = document.querySelector(`[data-goal-pin="${id}"]`);
+  if (!btn) return;
+  const card = btn.closest('.goal-card');
+  const wasPinned = card.classList.contains('pinned');
+  setStar(btn, !wasPinned);
+  if (card) card.classList.toggle('pinned', !wasPinned);
+  try {
+    const r = await api('POST', '/goals/' + id + '/pin');
+    if (r.is_pinned !== !wasPinned) { setStar(btn, r.is_pinned); if (card) card.classList.toggle('pinned', r.is_pinned); }
+  } catch (e) {
+    setStar(btn, wasPinned); if (card) card.classList.toggle('pinned', wasPinned);
+    toast('ошибка');
+  }
 }
 async function archiveGoal(id) {
-  try { await api('POST', '/goals/' + id + '/archive'); toast('в архив'); await loadGoals(); } catch (e) { toast('ошибка'); }
+  removeCardOf(`[data-goal-archive="${id}"]`);
+  try { await api('POST', '/goals/' + id + '/archive'); toast('в архив'); }
+  catch (e) { toast('ошибка'); await loadGoals(); }
 }
 async function activateGoal(id) {
-  try { await api('POST', '/goals/' + id + '/activate'); toast('возвращено в созвездие'); await loadGoals(); } catch (e) { toast('ошибка'); }
+  removeCardOf(`[data-goal-activate="${id}"]`);
+  try { await api('POST', '/goals/' + id + '/activate'); toast('возвращено в созвездие'); }
+  catch (e) { toast('ошибка'); await loadGoals(); }
 }
 async function deleteGoal(id) {
-  try { await api('DELETE', '/goals/' + id); toast('удалено'); await loadGoals(); } catch (e) { toast('ошибка'); }
+  removeCardOf(`[data-goal-delete="${id}"]`);
+  try { await api('DELETE', '/goals/' + id); toast('удалено'); }
+  catch (e) { toast('ошибка'); await loadGoals(); }
 }
 
 async function goalToProject(goalId, title) {

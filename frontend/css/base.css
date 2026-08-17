@@ -85,3 +85,12 @@ input, textarea, select, button { font-family: inherit; }
 .btn-ghost:hover { background: var(--surface); color: var(--text-2); }
 .btn-icon { background: transparent; border: none; color: var(--text-3); font-size: var(--font-md); padding: 6px 10px; cursor: pointer; border-radius: var(--radius-xs); }
 .btn-icon:hover { background: var(--surface); color: var(--text-2); }
+
+/* ═══ Микро-отклик нажатий (мгновенная реакция) ═══ */
+button, .task-check, .note-expand-btn, .goals-archived-toggle {
+  -webkit-tap-highlight-color: transparent;
+}
+button:active:not(:disabled) { transform: scale(0.94); }
+.task-check:active { transform: scale(0.88); }
+button:disabled { cursor: default; }
+.note-fav.pop, .task-fav.pop, .goal-pin.pop { animation: starPop 0.28s ease; }
