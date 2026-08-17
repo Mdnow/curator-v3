@@ -1148,6 +1148,8 @@ async function assignNoteToProject(projectId) {
 let currentThreadId = null;
 let currentProjectId = null;
 let projectsCache = [];
+let pendingChatFile = null;
+let pendingChatFileName = '';
 
 function showChat() {
   openChatPanel();
@@ -1316,15 +1318,48 @@ function openNoteInNotes(date) {
 
 async function sendChat() {
   const input = $('#chatInput'); const msg = input.value.trim();
-  if (!msg) return;
+  if (!msg && !pendingChatFile) return;
   if ($('#chatLoading')) return;
   const messagesEl = $('#chatMessages');
-  messagesEl.innerHTML += `<div class="chat-msg user">${esc(msg)}</div>`;
-  input.value = '';
+  if (pendingChatFile) {
+    messagesEl.innerHTML += `<div class="chat-msg user">${esc('файл: ' + pendingChatFileName)}${msg ? '<br>' + esc(msg) : ''}</div>`;
+    clearPendingChatFile();
+  } else {
+    messagesEl.innerHTML += `<div class="chat-msg user">${esc(msg)}</div>`;
+    input.value = '';
+  }
   messagesEl.innerHTML += `<div class="chat-msg ai" id="chatLoading"><div class="ai-dot"></div> думаю...</div>`;
   messagesEl.scrollTop = messagesEl.scrollHeight;
   try {
-    const result = await api('POST', '/ai/chat', { message: msg, thread_id: currentThreadId }, { timeoutMs: CHAT_TIMEOUT_MS });
+    let result;
+    if (pendingChatFile) {
+      const fd = new FormData();
+      fd.append('file', pendingChatFile, pendingChatFileName);
+      if (msg) fd.append('message', msg);
+      if (currentThreadId) fd.append('thread_id', currentThreadId);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), CHAT_TIMEOUT_MS);
+      let r;
+      try {
+        r = await fetch(API + '/chat/upload', {
+          method: 'POST',
+          headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+          body: fd,
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+      if (r.status === 401) { logout(); toast('сессия истекла — войди заново'); throw new Error('unauthorized'); }
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({ detail: 'ошибка' }));
+        throw new Error(err.detail || 'ошибка');
+      }
+      result = await r.json();
+      clearPendingChatFile();
+    } else {
+      result = await api('POST', '/ai/chat', { message: msg, thread_id: currentThreadId }, { timeoutMs: CHAT_TIMEOUT_MS });
+    }
     const loadingEl = $('#chatLoading'); if (loadingEl) loadingEl.remove();
     if (result.thread_id) currentThreadId = result.thread_id;
     const parsed = parseChatReply(result.reply);
@@ -1346,6 +1381,46 @@ async function sendChat() {
     messagesEl.innerHTML += `<div class="chat-msg ai">${esc(apiErrorMessage(e))}</div>`;
   }
   messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function pickChatFile() {
+  $('#chatFileInput').value = '';
+  $('#chatFileInput').click();
+}
+
+function onChatFileSelected() {
+  const input = $('#chatFileInput');
+  const f = input.files && input.files[0];
+  if (!f) return;
+  if (f.size > 5 * 1024 * 1024) { toast('файл больше 5 МБ'); return; }
+  pendingChatFile = f;
+  pendingChatFileName = f.name;
+  renderPendingChatFile();
+  $('#chatInput').focus();
+}
+
+function renderPendingChatFile() {
+  const chip = $('#chatFileChip');
+  if (!pendingChatFile) { if (chip) chip.remove(); return; }
+  if (chip) {
+    chip.querySelector('.chat-file-chip-name').textContent = pendingChatFileName;
+    return;
+  }
+  const row = document.querySelector('.chat-input-row');
+  if (!row) return;
+  const el = document.createElement('div');
+  el.className = 'chat-file-chip';
+  el.id = 'chatFileChip';
+  el.innerHTML = `<span class="chat-file-chip-name">${esc(pendingChatFileName)}</span><button class="btn btn-icon chat-file-chip-clear" title="убрать файл">&#10005;</button>`;
+  el.querySelector('.chat-file-chip-clear').addEventListener('click', () => { clearPendingChatFile(); });
+  row.insertBefore(el, $('#chatInput'));
+}
+
+function clearPendingChatFile() {
+  pendingChatFile = null;
+  pendingChatFileName = '';
+  renderPendingChatFile();
+  const input = $('#chatFileInput'); if (input) input.value = '';
 }
 
 // ═══ Dialogs (archive) ═══
@@ -1843,6 +1918,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Chat
   $('#chatSend').addEventListener('click', sendChat);
+  $('#chatFileBtn').addEventListener('click', pickChatFile);
+  $('#chatFileInput').addEventListener('change', onChatFileSelected);
   $('#chatInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } });
   $('#chatMessages').addEventListener('click', e => {
     const save = e.target.closest('.btn-save-thought');

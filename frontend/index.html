@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="/css/notes.css?v=12">
   <link rel="stylesheet" href="/css/tasks.css?v=6">
   <link rel="stylesheet" href="/css/goals.css?v=7">
-  <link rel="stylesheet" href="/css/chat.css?v=11">
+  <link rel="stylesheet" href="/css/chat.css?v=12">
   <link rel="stylesheet" href="/css/patterns.css?v=7">
   <link rel="stylesheet" href="/css/tiktok.css?v=1">
   <link rel="stylesheet" href="/css/projects.css?v=5">
@@ -323,6 +323,8 @@
         <div class="chat-input-row">
           <button class="btn btn-icon chat-back-btn" id="chatBackBtn" title="назад">&#8592;</button>
           <input type="text" class="chat-input" id="chatInput" placeholder="напиши сообщение...">
+          <label class="btn btn-icon chat-file-btn" id="chatFileBtn" title="прикрепить файл (текст, PDF, изображение)">&#10010;</label>
+          <input type="file" id="chatFileInput" accept=".txt,.md,.markdown,.csv,.json,.log,.pdf,.png,.jpg,.jpeg,.webp,.gif" style="display:none">
           <button class="btn" id="chatSend">&#10148;</button>
         </div>
       </div>
@@ -393,6 +395,6 @@
     </div>
   </div>
 
-  <script src="/js/app.js?v=24"></script>
+  <script src="/js/app.js?v=25"></script>
 </body>
 </html>

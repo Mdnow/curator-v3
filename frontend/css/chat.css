@@ -74,6 +74,20 @@
 .chat-input:focus { border-color: var(--border-focus); }
 .chat-input::placeholder { color: var(--text-3); }
 
+.chat-file-btn { flex-shrink: 0; color: var(--text-3); }
+.chat-file-btn:hover { color: var(--accent); }
+.chat-file-chip {
+  flex: 0 1 auto; display: flex; align-items: center; gap: var(--space-xs);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 4px 8px; max-width: 200px;
+}
+.chat-file-chip-name {
+  font-size: var(--font-xs); color: var(--text-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chat-file-chip-clear { padding: 0 2px; font-size: var(--font-xs); color: var(--text-3); }
+.chat-file-chip-clear:hover { color: var(--danger); }
+
 .archive-panel {
   display: none; flex-direction: column; height: 100%;
 }

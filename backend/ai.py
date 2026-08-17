@@ -27,6 +27,18 @@ ZEN_MODELS = [
 
 EMBED_MODEL = "nvidia/nemotron-3-embed-1b:free"
 
+# Vision-модели для осмысления изображений (OpenRouter, free).
+VISION_MODELS = [
+    "google/gemma-4-26b-a4b-it:free",
+    "google/gemma-4-31b-it:free",
+    "nvidia/nemotron-nano-12b-v2-vl:free",
+]
+
+VISION_DESCRIBE_PROMPT = """Опиши содержимое изображения максимально информативно:
+какие объекты, текст, цифры, структура. Если на изображении есть текст — выпиши
+его дословно. Если это скриншот приложения/чата — перескажи ключевые элементы.
+Лаконично, по делу, по-русски."""
+
 PROVIDERS = []
 if ZEN_API_KEY:
     PROVIDERS.append(
@@ -332,6 +344,51 @@ async def call_ai_json(
                     if data is not None:
                         return data
     return None
+
+
+async def describe_image(image_b64: str, mime: str = "image/png") -> str:
+    """Описание изображения через vision-модель OpenRouter (free)."""
+    if not OPENROUTER_API_KEY or not image_b64:
+        return ""
+    data_url = f"data:{mime};base64,{image_b64}"
+    msgs = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": VISION_DESCRIBE_PROMPT},
+                {"type": "image_url", "image_url": {"url": data_url}},
+            ],
+        }
+    ]
+    async with httpx.AsyncClient(timeout=90) as client:
+        for _ in range(2):
+            for model in VISION_MODELS:
+                try:
+                    r = await client.post(
+                        OPENROUTER_URL,
+                        headers={
+                            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "model": model,
+                            "messages": msgs,
+                            "temperature": 0.3,
+                            "max_tokens": 1000,
+                        },
+                    )
+                    if r.status_code >= 400:
+                        print(f"[vision] {model} -> {r.status_code}", flush=True)
+                        continue
+                    content = r.json()["choices"][0]["message"]["content"]
+                    if content and not _is_reasoning_noise(content):
+                        return content.strip()
+                except Exception as e:
+                    print(
+                        f"[vision] {model} -> EXC {type(e).__name__}: {str(e)[:150]}",
+                        flush=True,
+                    )
+    return ""
 
 
 async def analyze_note(text: str) -> dict:
