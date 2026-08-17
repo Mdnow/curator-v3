@@ -96,6 +96,7 @@ function loadPageData() {
     case 'notes': loadNotes(); break;
     case 'tasks': loadTasks(); break;
     case 'goals': loadGoals(); break;
+    case 'projects': loadProjectsPage(); break;
     case 'chat': showChat(); break;
     case 'tiktok': loadTikTok(); break;
   }
@@ -152,14 +153,15 @@ function goToday() { selectedDate = todayStr(); const n = new Date(); calYear = 
 function renderPageTitle() {
   const d = new Date(selectedDate + 'T12:00:00');
   const today = selectedDate === todayStr();
-  const titles = { notes: 'Заметки', goals: 'Цели', tasks: 'Задачи', chat: 'Куратор', tiktok: 'Тикток' };
+  const titles = { notes: 'Заметки', goals: 'Цели', tasks: 'Задачи', chat: 'Куратор', projects: 'Проекты', tiktok: 'Тикток' };
   $('#pageTitle').textContent = titles[currentPage] || '';
   if (currentPage === 'notes' || currentPage === 'tasks') {
     $('#pageSubtitle').textContent = today ? 'Сегодня' : fmtDate(selectedDate) + ', ' + RU_DAYS[d.getDay()];
   } else {
     $('#pageSubtitle').textContent = today ? RU_DAYS[d.getDay()] : fmtDate(selectedDate);
   }
-  $('#btnToday').classList.toggle('active', today);
+  const todayBtn = $('#btnToday');
+  if (todayBtn) todayBtn.classList.toggle('active', today);
   updateMobileHeader();
 }
 
@@ -167,7 +169,7 @@ function updateMobileHeader() {
   if (!isMobile()) return;
   const d = new Date(selectedDate + 'T12:00:00');
   const today = selectedDate === todayStr();
-  const titles = { notes: 'ЗАМЕТКИ', goals: 'ЦЕЛИ', tasks: 'ЗАДАЧИ', chat: 'КУРАТОР', tiktok: 'ТИКТОК' };
+  const titles = { notes: 'ЗАМЕТКИ', goals: 'ЦЕЛИ', tasks: 'ЗАДАЧИ', chat: 'КУРАТОР', projects: 'ПРОЕКТЫ', tiktok: 'ТИКТОК' };
   const el = $('#mobileHeaderTitle');
   if (el) el.textContent = titles[currentPage] || '';
   const dateEl = $('#mobileHeaderDate');
@@ -618,9 +620,40 @@ function renderProjects() {
   ).join('');
   const list = $('#projectsList');
   const listM = $('#projectsListMobile');
+  const pageList = $('#projectsPageList');
   const emptyHtml = '<div class="project-item-meta" style="padding:6px 8px">нет проектов</div>';
   if (list) list.innerHTML = html || emptyHtml;
   if (listM) listM.innerHTML = html || emptyHtml;
+  if (pageList) pageList.innerHTML = html || '';
+  const pageEmpty = $('#projectsPageEmpty');
+  if (pageEmpty) pageEmpty.style.display = html ? 'none' : 'block';
+}
+
+function loadProjectsPage() {
+  hideAllSections();
+  $('#projectsPageSection').style.display = 'block';
+  loadProjects();
+}
+
+function toggleProjectsPageAddForm() {
+  const form = $('#projectsPageAddForm');
+  form.style.display = form.style.display === 'none' ? 'block' : 'none';
+  if (form.style.display === 'block') $('#projectsPageAddInput').focus();
+}
+
+async function createProjectFromPage() {
+  const input = $('#projectsPageAddInput');
+  const name = input.value.trim();
+  input.value = '';
+  $('#projectsPageAddForm').style.display = 'none';
+  if (!name) return;
+  try {
+    const p = await api('POST', '/projects', { name });
+    projectsCache.push(p);
+    renderProjects();
+    toast('проект создан');
+    openProject(p.id);
+  } catch (e) { toast(e.message || 'ошибка'); }
 }
 
 function showAddProjectForm() {
@@ -694,7 +727,7 @@ function switchProjectTab(tab) {
 
 function closeProject() {
   closeProjectSilently();
-  navigateTo('notes');
+  navigateTo(lastCenterPage);
 }
 
 async function loadProjectDetail() {
@@ -1257,6 +1290,7 @@ function hideAllSections() {
   $('#notesSection').style.display = 'none';
   $('#tasksSection').style.display = 'none';
   $('#goalsSection').style.display = 'none';
+  $('#projectsPageSection').style.display = 'none';
   $('#chatSection').classList.remove('active');
   $('#tiktokSection').style.display = 'none';
   $('#archivePanel').style.display = 'none';
@@ -1428,7 +1462,8 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#drawerOverlay').addEventListener('click', closeDrawer);
 
   // Calendar
-  $('#btnToday').addEventListener('click', goToday);
+  const todayBtn = $('#btnToday');
+  if (todayBtn) todayBtn.addEventListener('click', goToday);
   const mobileTodayBtn = $('.btn-today-mobile');
   if (mobileTodayBtn) mobileTodayBtn.addEventListener('click', goToday);
   $('#calDays').addEventListener('click', e => { const day = e.target.closest('[data-date]'); if (day) selectDate(day.dataset.date); });
@@ -1605,24 +1640,23 @@ document.addEventListener('DOMContentLoaded', () => {
   // Selection toolbar
   initSelectionToolbar();
 
-  // Projects
-  $('#projectsAdd').addEventListener('click', showAddProjectForm);
-  $('#projectsAddInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') createProject();
-    if (e.key === 'Escape') { $('#projectsAddForm').style.display = 'none'; }
+  // Projects page (раздел «Проекты»)
+  const pageAddBtn = $('#projectsPageAddBtn');
+  if (pageAddBtn) pageAddBtn.addEventListener('click', toggleProjectsPageAddForm);
+  const pageAddInput = $('#projectsPageAddInput');
+  if (pageAddInput) pageAddInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); createProjectFromPage(); }
+    if (e.key === 'Escape') { $('#projectsPageAddForm').style.display = 'none'; }
   });
-  $('#projectsAddSubmit').addEventListener('click', createProject);
-  $('#projectsAddMobile').addEventListener('click', () => {
-    const form = $('#projectsAddFormMobile');
-    form.style.display = form.style.display === 'none' ? 'block' : 'none';
-    if (form.style.display === 'block') $('#projectsAddInputMobile').focus();
-  });
-  $('#projectsAddSubmitMobile').addEventListener('click', createProjectMobile);
-  $('#projectsAddInputMobile').addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); createProjectMobile(); }
-  });
-  $('#projectsList').addEventListener('click', e => { const it = e.target.closest('[data-project-id]'); if (it) openProject(parseInt(it.dataset.projectId)); });
-  $('#projectsListMobile').addEventListener('click', e => { const it = e.target.closest('[data-project-id]'); if (it) { closeDrawer(); openProject(parseInt(it.dataset.projectId)); } });
+  const pageAddSubmit = $('#projectsPageAddSubmit');
+  if (pageAddSubmit) pageAddSubmit.addEventListener('click', createProjectFromPage);
+  const pageList = $('#projectsPageList');
+  if (pageList) pageList.addEventListener('click', e => { const it = e.target.closest('[data-project-id]'); if (it) openProject(parseInt(it.dataset.projectId)); });
+
+  // Drawer кнопки навигации
+  $$('.drawer-btn[data-page]').forEach(btn => btn.addEventListener('click', () => navigateTo(btn.dataset.page)));
+  const projectsListMobile = $('#projectsListMobile');
+  if (projectsListMobile) projectsListMobile.addEventListener('click', e => { const it = e.target.closest('[data-project-id]'); if (it) { closeDrawer(); openProject(parseInt(it.dataset.projectId)); } });
 
   // Project screen
   $('#projectBackBtn').addEventListener('click', closeProject);

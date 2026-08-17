@@ -55,11 +55,8 @@
           <div class="cal-days" id="calDaysMobile"></div>
         </div>
       </div>
-      <button class="drawer-btn btn-today-mobile" style="margin-top:8px" title="сегодня">
-        <svg class="today-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M3 10.5 12 3l9 7.5"></path>
-          <path d="M5 9.5V21h14V9.5"></path>
-        </svg>
+      <button class="drawer-btn" data-page="goals" style="margin-top:8px">
+        <span class="drawer-btn-icon">&#9873;</span> цели
       </button>
     </div>
 
@@ -67,18 +64,6 @@
       <button class="drawer-btn btn-daily-summary-mobile">итог</button>
       <button class="drawer-btn btn-backup-mobile">бекап</button>
       <button class="drawer-btn btn-reanalyze-mobile">анализ</button>
-    </div>
-
-    <div class="drawer-section">
-      <div class="drawer-section-title">проекты</div>
-      <button class="drawer-btn projects-add-mobile" id="projectsAddMobile">
-        <span class="drawer-btn-icon">+</span> новый проект
-      </button>
-      <div class="projects-add-form" id="projectsAddFormMobile" style="display:none">
-        <input type="text" id="projectsAddInputMobile" placeholder="название проекта" autocomplete="off" maxlength="200">
-        <button class="btn btn-small" id="projectsAddSubmitMobile">создать</button>
-      </div>
-      <div class="projects-list projects-list-mobile" id="projectsListMobile"></div>
     </div>
 
     <div class="drawer-user" id="sidebarUser"></div>
@@ -90,9 +75,9 @@
       <span class="mobile-tab-icon">✎</span>
       <span>Заметки</span>
     </button>
-    <button class="mobile-tab" data-page="goals">
-      <span class="mobile-tab-icon">&#9873;</span>
-      <span>Цели</span>
+    <button class="mobile-tab" data-page="projects">
+      <span class="mobile-tab-icon">&#9635;</span>
+      <span>Проекты</span>
     </button>
     <button class="mobile-tab" data-page="chat">
       <span class="mobile-tab-icon">◇</span>
@@ -134,26 +119,16 @@
         <span class="sidebar-version">v3</span>
       </div>
 
-<div class="projects-sidebar">
-        <div class="projects-header">
-          <span class="projects-title">проекты</span>
-          <button class="btn btn-icon projects-add-btn" id="projectsAdd" title="новый проект">&#10010;</button>
-        </div>
-        <div class="projects-add-form" id="projectsAddForm" style="display:none">
-          <input type="text" id="projectsAddInput" placeholder="название проекта" autocomplete="off" maxlength="200">
-          <button class="btn btn-small" id="projectsAddSubmit">создать</button>
-        </div>
-        <div class="projects-list" id="projectsList"></div>
-      </div>
-
-      <nav class="nav-section">
+<nav class="nav-section">
         <button class="nav-btn active" data-page="notes">Заметки</button>
-        <button class="nav-btn" data-page="goals">Цели</button>
+        <button class="nav-btn" data-page="projects">Проекты</button>
         <button class="nav-btn" data-page="chat">Куратор</button>
         <button class="nav-btn" data-page="tiktok">Тикток</button>
       </nav>
 
-      <button class="btn btn-small btn-today" id="btnToday" title="сегодня">&#8962;</button>
+      <nav class="nav-section">
+        <button class="nav-btn" data-page="goals">Цели</button>
+      </nav>
 
       <div class="calendar">
         <div class="cal-header">
@@ -244,6 +219,25 @@
         <div class="goals-empty" id="goalsEmpty" style="display:none">
           <div class="empty-icon">&#9873;</div>
           <div class="empty-text">целей пока нет — нажми «обновить цели»</div>
+        </div>
+      </div>
+
+      <!-- Projects -->
+      <div id="projectsPageSection" style="display:none">
+        <div class="projects-page">
+          <div class="projects-page-toolbar">
+            <span class="projects-page-title">проекты</span>
+            <button class="btn btn-small" id="projectsPageAddBtn">+ новый</button>
+          </div>
+          <div class="projects-add-form" id="projectsPageAddForm" style="display:none">
+            <input type="text" id="projectsPageAddInput" placeholder="название проекта" autocomplete="off" maxlength="200">
+            <button class="btn btn-small" id="projectsPageAddSubmit">создать</button>
+          </div>
+          <div class="projects-page-list" id="projectsPageList"></div>
+          <div class="projects-page-empty" id="projectsPageEmpty" style="display:none">
+            <div class="empty-icon">&#9671;</div>
+            <div class="empty-text">проектов пока нет — создай первый</div>
+          </div>
         </div>
       </div>
 
@@ -399,6 +393,6 @@
     </div>
   </div>
 
-  <script src="/js/app.js?v=20"></script>
+  <script src="/js/app.js?v=21"></script>
 </body>
 </html>

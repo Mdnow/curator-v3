@@ -163,3 +163,13 @@
   border-radius: var(--radius-xs); transition: all 0.15s;
 }
 .assign-modal-cancel:hover { background: var(--surface-hover); color: var(--text-2); }
+
+/* ── Страница «Проекты» (раздел) ── */
+.projects-page { display: flex; flex-direction: column; gap: var(--space-sm); max-width: 640px; }
+.projects-page-toolbar { display: flex; align-items: center; justify-content: space-between; }
+.projects-page-title {
+  font-size: var(--font-xs); color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.projects-page-list { display: flex; flex-direction: column; gap: var(--space-xs); }
+.projects-page-empty { padding: var(--space-lg); text-align: center; color: var(--text-3); }
