@@ -130,7 +130,7 @@ async def backup_data(user_id: int = Depends(get_current_user)):
             )
 
         chat_rows = await db.fetch(
-            """SELECT role, content, created_at, session_id
+            """SELECT role, content, created_at, session_id, thread_id
                FROM chat_history WHERE user_id=$1 ORDER BY created_at""",
             user_id,
         )
@@ -142,6 +142,7 @@ async def backup_data(user_id: int = Depends(get_current_user)):
                     "content": r["content"],
                     "time": str(r["created_at"]) if r["created_at"] else "",
                     "session_id": r["session_id"],
+                    "thread_id": r["thread_id"],
                 }
             )
 

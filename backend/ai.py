@@ -377,6 +377,34 @@ async def analyze_note(text: str) -> dict:
     }
 
 
+THREAD_TITLE_PROMPT = """Ты придумываешь название для диалога в приложении-дневнике.
+По первому сообщению пользователя назови разговор коротко: 2-5 слов, по смыслу,
+как подпись к чату в мессенджере. Верни JSON:
+{"title": "название без кавычек и точки"}
+Пример: сообщение «помоги разобраться, почему я боюсь переезда в Дубай» → {"title": "Страх переезда в Дубай"}
+
+Сообщение:"""
+
+
+async def generate_thread_title(first_message: str) -> str:
+    """Короткое название ветки диалога по смыслу (2-5 слов)."""
+    if not PROVIDERS or not first_message:
+        return ""
+    text = first_message.strip()[:400]
+    if not text:
+        return ""
+    data = await call_ai_json(
+        THREAD_TITLE_PROMPT + "\n" + text,
+        temperature=0.2,
+        max_tokens=60,
+    )
+    if not data:
+        return ""
+    title = str(data.get("title", "")).strip().strip('"«»').strip()
+    title = title.split("\n")[0][:60]
+    return title
+
+
 async def analyze_dream(text: str) -> dict:
     if not PROVIDERS:
         return {

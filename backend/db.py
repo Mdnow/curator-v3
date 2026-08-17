@@ -129,6 +129,26 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # Ветки чата (ADR-0014): диалог = тема с названием, сообщения привязаны
+        # через thread_id. Проектные диалоги остаются в своём режиме (project_id).
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS chat_threads (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                title TEXT NOT NULL DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute(
+            "ALTER TABLE chat_history ADD COLUMN IF NOT EXISTS thread_id INTEGER REFERENCES chat_threads(id) ON DELETE CASCADE"
+        )
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chat_thread ON chat_history(user_id, thread_id, created_at)"
+        )
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_threads_user ON chat_threads(user_id, updated_at)"
+        )
         # Embeddings for semantic search (pgvector)
         await db.execute("CREATE EXTENSION IF NOT EXISTS vector")
         await db.execute("""
@@ -282,3 +302,58 @@ async def init_db():
         await db.execute(
             "CREATE INDEX IF NOT EXISTS idx_chat_project ON chat_history(user_id, project_id)"
         )
+
+        # ── Миграция (ADR-0014): старые сессии → ветки chat_threads ──
+        # Сессии-по-времени превращаются в тематические ветки: одна группа
+        # (user_id, session_id) → одна ветка, заголовок из первого сообщения.
+        # Проектные диалоги (project_id) не трогаем — они остаются в своём режиме.
+        migrate_groups = await db.fetch(
+            """SELECT user_id, session_id, MIN(created_at) as started
+               FROM chat_history
+               WHERE session_id IS NOT NULL AND thread_id IS NULL
+               GROUP BY user_id, session_id"""
+        )
+        for g in migrate_groups:
+            first = await db.fetchrow(
+                """SELECT content FROM chat_history
+                   WHERE user_id=$1 AND session_id=$2 AND role='user'
+                   ORDER BY created_at ASC LIMIT 1""",
+                g["user_id"],
+                g["session_id"],
+            )
+            title = (first["content"] or "")[:60] if first else ""
+            thr = await db.fetchrow(
+                """INSERT INTO chat_threads (user_id, title, created_at, updated_at)
+                   VALUES ($1,$2,$3,$3) RETURNING id""",
+                g["user_id"],
+                title,
+                g["started"] or "now()",
+            )
+            await db.execute(
+                """UPDATE chat_history SET thread_id=$1
+                   WHERE user_id=$2 AND session_id=$3""",
+                thr["id"],
+                g["user_id"],
+                g["session_id"],
+            )
+        # Старые «несохранённые» сообщения без сессии и без проекта — в одну ветку.
+        unassigned_users = await db.fetch(
+            """SELECT DISTINCT user_id, MIN(created_at) as started
+               FROM chat_history
+               WHERE session_id IS NULL AND thread_id IS NULL AND project_id IS NULL
+               GROUP BY user_id"""
+        )
+        for u in unassigned_users:
+            thr = await db.fetchrow(
+                """INSERT INTO chat_threads (user_id, title, created_at, updated_at)
+                   VALUES ($1,'старые сообщения',$2,$2) RETURNING id""",
+                u["user_id"],
+                u["started"] or "now()",
+            )
+            await db.execute(
+                """UPDATE chat_history SET thread_id=$1
+                   WHERE user_id=$2 AND session_id IS NULL AND thread_id IS NULL
+                     AND project_id IS NULL""",
+                thr["id"],
+                u["user_id"],
+            )

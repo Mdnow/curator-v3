@@ -5,8 +5,8 @@ from backend.db import get_db
 from backend.auth import get_current_user
 from backend.crypto import encrypt, decrypt
 from backend.models import ChatReq
-from backend.ai import chat_with_context, CHAT_SYSTEM
-from datetime import datetime, timedelta
+from backend.ai import chat_with_context, generate_thread_title, CHAT_SYSTEM
+from datetime import datetime
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -109,14 +109,32 @@ async def _save_note(
     return {"text": text, "note_id": row["id"], "ai": ai}
 
 
+async def _title_thread(thread_id: int, user_id: int, first_message: str):
+    """Фоновый AI-заголовок ветки из первого сообщения (по смыслу, 2-5 слов)."""
+    from backend.db import get_pool
+
+    title = await generate_thread_title(first_message)
+    if not title:
+        return
+    pool = await get_pool()
+    async with pool.acquire() as db:
+        await db.execute(
+            "UPDATE chat_threads SET title=$1 WHERE id=$2 AND user_id=$3",
+            title,
+            thread_id,
+            user_id,
+        )
+
+
 @router.post("/ai/chat")
 async def ai_chat(
     req: ChatReq, background: BackgroundTasks, user_id: int = Depends(get_current_user)
 ):
     async with get_db() as db:
-        # Диалог проекта: постоянный (без правила «2 часа»), фильтр по project_id.
+        # Диалог проекта остаётся в своём режиме (ADR-0014): постоянный фильтр по project_id.
+        # Обычный чат — ветки (thread): новая при первом сообщении, продолжение по thread_id.
         project_id = None
-        session_id = None
+        thread_id = None
         if req.project_id is not None:
             owner = await db.fetchrow(
                 "SELECT id FROM projects WHERE id=$1 AND user_id=$2",
@@ -126,33 +144,23 @@ async def ai_chat(
             if not owner:
                 raise HTTPException(404, "проект не найден")
             project_id = req.project_id
-        elif req.session_id is not None:
+        elif req.thread_id is not None:
             owner = await db.fetchrow(
-                "SELECT id FROM chat_history WHERE user_id=$1 AND session_id=$2 LIMIT 1",
+                "SELECT id FROM chat_threads WHERE id=$1 AND user_id=$2 LIMIT 1",
+                req.thread_id,
                 user_id,
-                req.session_id,
             )
             if not owner:
-                raise HTTPException(404, "диалог не найден")
-            session_id = req.session_id
+                raise HTTPException(404, "ветка не найдена")
+            thread_id = req.thread_id
         else:
-            last_row = await db.fetchrow(
-                """SELECT session_id, created_at FROM chat_history
-                   WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1""",
+            # Новая ветка: модель как в ChatGPT/Claude — каждое новое обращение
+            # из «обсудить»/«новый диалог» создаёт отдельный разговор.
+            row = await db.fetchrow(
+                "INSERT INTO chat_threads (user_id) VALUES ($1) RETURNING id",
                 user_id,
             )
-            session_id = 1
-            if last_row:
-                try:
-                    last_time = last_row["created_at"]
-                    if isinstance(last_time, str):
-                        last_time = datetime.fromisoformat(last_time)
-                    if (datetime.now() - last_time) > timedelta(hours=2):
-                        session_id = (last_row["session_id"] or 0) + 1
-                    else:
-                        session_id = last_row["session_id"] or 1
-                except Exception:
-                    session_id = (last_row["session_id"] or 0) + 1
+            thread_id = row["id"]
 
         if project_id is not None:
             await db.execute(
@@ -165,13 +173,14 @@ async def ai_chat(
             )
         else:
             await db.execute(
-                """INSERT INTO chat_history (user_id, role, content, session_id)
+                """INSERT INTO chat_history (user_id, role, content, thread_id)
                    VALUES ($1,$2,$3,$4)""",
                 user_id,
                 "user",
                 req.message,
-                session_id,
+                thread_id,
             )
+            background.add_task(_title_thread, thread_id, user_id, req.message)
 
         if project_id is not None:
             all_rows = await db.fetch(
@@ -184,10 +193,10 @@ async def ai_chat(
         else:
             all_rows = await db.fetch(
                 """SELECT role, content FROM chat_history
-                   WHERE user_id=$1 AND session_id=$2
+                   WHERE user_id=$1 AND thread_id=$2
                    ORDER BY created_at DESC LIMIT 40""",
                 user_id,
-                session_id,
+                thread_id,
             )
         history = []
         for r in reversed(all_rows):
@@ -352,12 +361,16 @@ async def ai_chat(
             )
         else:
             await db.execute(
-                """INSERT INTO chat_history (user_id, role, content, session_id)
+                """INSERT INTO chat_history (user_id, role, content, thread_id)
                    VALUES ($1,$2,$3,$4)""",
                 user_id,
                 "assistant",
                 result,
-                session_id,
+                thread_id,
+            )
+            await db.execute(
+                "UPDATE chat_threads SET updated_at=CURRENT_TIMESTAMP WHERE id=$1",
+                thread_id,
             )
 
         return {
@@ -365,7 +378,8 @@ async def ai_chat(
             "auto_saved": [],
             "saved": saved,
             "note_refs": note_refs,
-            "session_id": session_id,
+            "thread_id": thread_id,
+            "session_id": thread_id,
             "project_id": project_id,
         }
 
@@ -405,97 +419,81 @@ async def chat_history(
 async def clear_chat(user_id: int = Depends(get_current_user)):
     async with get_db() as db:
         await db.execute("DELETE FROM chat_history WHERE user_id=$1", user_id)
+        await db.execute("DELETE FROM chat_threads WHERE user_id=$1", user_id)
         return {"ok": True}
 
 
-@router.delete("/chat/sessions/{session_id}")
-async def delete_session(session_id: int, user_id: int = Depends(get_current_user)):
+@router.delete("/chat/threads/{thread_id}")
+async def delete_thread(thread_id: int, user_id: int = Depends(get_current_user)):
     async with get_db() as db:
-        if session_id == 0:
-            await db.execute(
-                "DELETE FROM chat_history WHERE user_id=$1 AND session_id IS NULL",
-                user_id,
-            )
-        else:
-            await db.execute(
-                "DELETE FROM chat_history WHERE user_id=$1 AND session_id=$2",
-                user_id,
-                session_id,
-            )
-        return {"ok": True}
-
-
-@router.get("/chat/sessions")
-async def chat_sessions(user_id: int = Depends(get_current_user)):
-    async with get_db() as db:
-        rows = await db.fetch(
-            """SELECT session_id, MIN(created_at) as started,
-                      MAX(created_at) as ended, COUNT(*) as msg_count
-               FROM chat_history
-               WHERE user_id=$1 AND session_id IS NOT NULL
-               GROUP BY session_id ORDER BY started DESC""",
+        await db.execute(
+            "DELETE FROM chat_threads WHERE id=$1 AND user_id=$2",
+            thread_id,
             user_id,
         )
-        sessions = []
+        return {"ok": True}
+
+
+@router.get("/chat/threads")
+async def chat_threads(user_id: int = Depends(get_current_user)):
+    async with get_db() as db:
+        rows = await db.fetch(
+            """SELECT t.id, t.title, t.created_at as started,
+                      MAX(h.created_at) as ended, COUNT(h.id) as msg_count,
+                      MIN(h.created_at) as first_at
+               FROM chat_threads t
+               LEFT JOIN chat_history h ON h.thread_id=t.id
+               WHERE t.user_id=$1
+               GROUP BY t.id
+               ORDER BY COALESCE(MAX(h.created_at), t.updated_at) DESC""",
+            user_id,
+        )
+        threads = []
         for r in rows:
-            first = await db.fetchrow(
-                """SELECT content FROM chat_history
-                   WHERE user_id=$1 AND session_id=$2 AND role='user'
-                   ORDER BY created_at ASC LIMIT 1""",
-                user_id,
-                r["session_id"],
-            )
-            preview = first["content"][:120] if first else ""
-            sessions.append(
+            title = (r["title"] or "").strip()
+            preview = ""
+            if not title:
+                first = await db.fetchrow(
+                    """SELECT content FROM chat_history
+                       WHERE user_id=$1 AND thread_id=$2 AND role='user'
+                       ORDER BY created_at ASC LIMIT 1""",
+                    user_id,
+                    r["id"],
+                )
+                preview = first["content"][:120] if first else ""
+            threads.append(
                 {
-                    "session_id": r["session_id"],
-                    "started": r["started"],
+                    "thread_id": r["id"],
+                    "title": title,
+                    "started": r["started"] or r["first_at"],
                     "ended": r["ended"],
-                    "msg_count": r["msg_count"],
+                    "msg_count": r["msg_count"] or 0,
                     "preview": preview,
                 }
             )
-
-        unassigned = await db.fetchrow(
-            """SELECT COUNT(*) as cnt FROM chat_history
-               WHERE user_id=$1 AND session_id IS NULL""",
-            user_id,
-        )
-        if unassigned and unassigned["cnt"] > 0:
-            sessions.insert(
-                0,
-                {
-                    "session_id": 0,
-                    "started": None,
-                    "ended": None,
-                    "msg_count": unassigned["cnt"],
-                    "preview": "старые сообщения",
-                },
-            )
-
-        return sessions
+        return threads
 
 
-@router.get("/chat/sessions/{session_id}")
-async def chat_session_messages(
-    session_id: int, user_id: int = Depends(get_current_user)
+@router.get("/chat/threads/{thread_id}")
+async def chat_thread_messages(
+    thread_id: int, user_id: int = Depends(get_current_user)
 ):
     async with get_db() as db:
-        if session_id == 0:
-            rows = await db.fetch(
-                """SELECT role, content, created_at
-                   FROM chat_history WHERE user_id=$1 AND session_id IS NULL
-                   ORDER BY created_at ASC""",
-                user_id,
-            )
-        else:
-            rows = await db.fetch(
-                """SELECT role, content, created_at
-                   FROM chat_history WHERE user_id=$1 AND session_id=$2
-                   ORDER BY created_at ASC""",
-                user_id,
-                session_id,
-            )
+        owner = await db.fetchrow(
+            "SELECT id FROM chat_threads WHERE id=$1 AND user_id=$2",
+            thread_id,
+            user_id,
+        )
+        if not owner:
+            raise HTTPException(404, "ветка не найдена")
+        rows = await db.fetch(
+            """SELECT role, content, created_at
+               FROM chat_history
+               WHERE user_id=$1 AND thread_id=$2
+               ORDER BY created_at ASC""",
+            user_id,
+            thread_id,
+        )
         return [
             {"role": r["role"], "content": r["content"], "time": r["created_at"]}
             for r in rows
@@ -510,7 +508,7 @@ async def chat_search(q: str = "", user_id: int = Depends(get_current_user)):
         escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         pattern = f"%{escaped}%"
         rows = await db.fetch(
-            """SELECT role, content, created_at, session_id
+            """SELECT role, content, created_at, thread_id
                FROM chat_history
                WHERE user_id=$1 AND content LIKE $2 ESCAPE '\\'
                ORDER BY created_at DESC LIMIT 50""",
@@ -534,7 +532,7 @@ async def chat_search(q: str = "", user_id: int = Depends(get_current_user)):
                     "snippet": snippet,
                     "full": text,
                     "time": r["created_at"],
-                    "session_id": r["session_id"],
+                    "thread_id": r["thread_id"],
                 }
             )
         return results
