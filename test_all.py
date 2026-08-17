@@ -2,6 +2,7 @@ import asyncio
 import time
 from httpx import AsyncClient, ASGITransport
 from backend.main import app
+from backend.crypto import encrypt, decrypt
 
 
 async def test():
@@ -9,6 +10,12 @@ async def test():
     async with AsyncClient(
         transport=transport, base_url="http://test", timeout=15
     ) as client:
+        # === 0. CRYPTO ROUND-TRIP ===
+        print("\n=== 0. CRYPTO ROUND-TRIP ===")
+        secret = "проверка шифрования: Марина, 2026"
+        restored = decrypt(encrypt(secret))
+        assert restored == secret, f"round-trip сломан: {restored!r} != {secret!r}"
+        print("  encrypt -> decrypt: OK")
         # Register/login
         r = await client.post(
             "/api/register", json={"username": "test_feat", "password": "test123"}
@@ -23,6 +30,7 @@ async def test():
 
         # === 1. THOUGHT THREADING ===
         print("\n=== 1. THOUGHT THREADING ===")
+        created_ids = []
         for i, text in enumerate(
             [
                 "Думаю о контроле. Почему так сильно хочется контролировать всё?",
@@ -38,6 +46,19 @@ async def test():
             print(f"  Note {i + 1}: {r.status_code}")
             if r.status_code != 200:
                 print(f"    Error: {r.text[:200]}")
+            else:
+                created_ids.append(r.json().get("id"))
+        assert len(created_ids) == 3, f"создано заметок: {len(created_ids)}"
+
+        # Проверка целостности: созданные заметки реально в базе
+        r = await client.get("/api/notes?date=2026-07-22", headers=h)
+        assert r.status_code == 200, f"GET notes: {r.status_code} {r.text[:200]}"
+        fetched_ids = {n["id"] for n in r.json()}
+        missing = [nid for nid in created_ids if nid not in fetched_ids]
+        assert not missing, f"заметки не найдены в базе: {missing}"
+        print(
+            f"  Notes в базе: {len(fetched_ids)}, созданных на месте: {len(created_ids)}"
+        )
 
         print("  Waiting 5s for AI background analysis...")
         time.sleep(5)
@@ -53,7 +74,7 @@ async def test():
             print(f"    Error: {r.text[:200]}")
 
         # Check if notes got thread_id
-        r = await client.get("/api/notes?days=1", headers=h)
+        r = await client.get("/api/notes?date=2026-07-22", headers=h)
         if r.status_code == 200:
             notes = r.json()
             for n in notes:
