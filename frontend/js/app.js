@@ -34,7 +34,24 @@ function fmtDate(iso) {
   return p[2] + '.' + p[1] + '.' + p[0];
 }
 function toast(msg) { const el = $('#toast'); el.textContent = msg; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2000); }
-function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+}
+// Черновик заметки: несохранённый текст не пропадает при смене даты/вкладки/перезагрузке
+function draftKey() { return 'curator_draft_' + selectedDate; }
+function saveDraft() {
+  const input = $('#noteInput');
+  if (!input) return;
+  const v = input.value;
+  if (v.trim()) localStorage.setItem(draftKey(), v);
+  else localStorage.removeItem(draftKey());
+}
+function clearDraft() { localStorage.removeItem(draftKey()); }
+function restoreDraft() {
+  const input = $('#noteInput');
+  if (!input || input.value.trim()) return;
+  const v = localStorage.getItem(draftKey());
+  if (v != null) { input.value = v; updateCharCount(); autoResize(); }
+}
 function setStar(btn, on) {
   if (!btn) return;
   btn.innerHTML = on ? '&#9733;' : '&#9734;';
@@ -55,14 +72,61 @@ function removeCardOf(selector) {
 }
 
 // ═══ API ═══
-async function api(method, path, body) {
-  const opts = { method, headers: { 'Content-Type': 'application/json' } };
-  if (token) opts.headers['Authorization'] = 'Bearer ' + token;
-  if (body) opts.body = JSON.stringify(body);
-  const r = await fetch(API + path, opts);
-  if (r.status === 401) { logout(); throw new Error('unauthorized'); }
-  if (!r.ok) { const err = await r.json().catch(() => ({ detail: 'ошибка' })); throw new Error(err.detail || 'ошибка'); }
-  return r.json();
+const FETCH_TIMEOUT_MS = 30000;
+const CHAT_TIMEOUT_MS = 90000;
+
+// Понятная причина ошибки вместо сухого «ошибка»
+function apiErrorMessage(e) {
+  if (e && e.name === 'AbortError') return 'сервер не ответил, попробуй ещё раз';
+  const m = e && e.message;
+  if (m && m !== 'ошибка' && m !== 'unauthorized') return m;
+  return 'не получилось, попробуй ещё раз';
+}
+
+async function api(method, path, body, opts = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs || FETCH_TIMEOUT_MS);
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const init = { method, headers, signal: controller.signal };
+  if (body) init.body = JSON.stringify(body);
+  try {
+    const r = await fetch(API + path, init);
+    if (r.status === 401) {
+      logout();
+      toast('сессия истекла — войди заново');
+      throw new Error('unauthorized');
+    }
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({ detail: 'ошибка' }));
+      throw new Error(err.detail || 'ошибка');
+    }
+    return r.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ═══ Кнопки: единый отклик (disabled + «...», без двойных нажатий) ═══
+async function runBusy(btn, task, busyLabel = '...') {
+  if (!btn) return task();
+  const restoreText = btn.textContent;
+  const restoreDisabled = btn.disabled;
+  btn.disabled = true;
+  btn.textContent = busyLabel;
+  try {
+    return await task();
+  } finally {
+    btn.disabled = restoreDisabled;
+    btn.textContent = restoreText;
+  }
+}
+
+function setButtonsBusy(selector, busy) {
+  $$(selector).forEach(b => {
+    if (busy) { b.dataset.busyText = b.textContent; b.disabled = true; b.textContent = '...'; }
+    else { b.disabled = false; b.textContent = b.dataset.busyText || b.textContent; }
+  });
 }
 
 // ═══ Auth ═══
@@ -197,6 +261,8 @@ function updateMobileHeader() {
 // ═══ Notes ═══
 async function loadNotes() {
   hideAllSections(); $('#notesSection').style.display = 'block';
+  restoreDraft();
+  showListLoading('#notesList');
   try {
     const notes = await api('GET', '/notes?date=' + selectedDate);
     if (!notes.length) { $('#notesList').innerHTML = ''; $('#emptyState').style.display = 'block'; return; }
@@ -319,14 +385,14 @@ async function saveNote() {
   const content = input.value.trim();
   if (!content) return;
   const saveBtn = $('#saveBtn'); const aiStatus = $('#aiStatus');
-  saveBtn.textContent = '...'; saveBtn.disabled = true; aiStatus.classList.add('active');
+  aiStatus.classList.add('active');
   try {
-    const result = await api('POST', '/notes', { content, note_date: selectedDate, tags: [], mood: '' });
-    input.value = ''; autoResize(); updateCharCount();
+    await runBusy(saveBtn, () => api('POST', '/notes', { content, note_date: selectedDate, tags: [], mood: '' }), 'сохраняю...');
+    input.value = ''; clearDraft(); autoResize(); updateCharCount();
     toast('сохранено');
     await loadNotes(); loadDateMarkers();
-  } catch (e) { toast('ошибка сохранения'); }
-  saveBtn.textContent = 'СОХРАНИТЬ'; saveBtn.disabled = false; aiStatus.classList.remove('active');
+  } catch (e) { toast(apiErrorMessage(e)); }
+  aiStatus.classList.remove('active');
 }
 
 async function toggleNoteFavorite(id) {
@@ -342,13 +408,22 @@ async function toggleNoteFavorite(id) {
     toast(r.is_favorited ? 'в избранном' : 'убрано');
   } catch (e) {
     setStar(btn, wasFav); card.classList.toggle('favorited', wasFav);
-    toast('ошибка');
+    toast(apiErrorMessage(e));
   }
 }
 async function deleteNote(id) {
-  removeCard(document.querySelector(`.note-card[data-note-id="${id}"]`));
-  try { await api('DELETE', '/notes/' + id); toast('удалено'); }
-  catch (e) { toast('ошибка'); await loadNotes(); }
+  const card = document.querySelector(`.note-card[data-note-id="${id}"]`);
+  if (!card) return;
+  card.classList.add('deleting');
+  try {
+    await api('DELETE', '/notes/' + id);
+    card.classList.remove('deleting');
+    removeCard(card);
+    toast('удалено');
+  } catch (e) {
+    card.classList.remove('deleting');
+    toast(apiErrorMessage(e));
+  }
 }
 
 // ═══ Edit Note ═══
@@ -390,15 +465,16 @@ async function saveEditNote(id) {
     toast('обновлено');
     editingNoteId = null;
     await loadNotes();
-  } catch (e) { toast('ошибка'); }
+  } catch (e) { toast(apiErrorMessage(e)); }
 }
 
 // ═══ Discuss with Curator ═══
 function discussWithCurator(text) {
   const short = text.length > 200 ? text.slice(0, 200) + '...' : text;
+  if (!newChat()) return;
   $('#chatInput').value = 'Расскажи подробнее об этой мысли: "' + short + '"';
   navigateTo('chat');
-  setTimeout(() => $('#chatInput').focus(), 100);
+  sendChat();
 }
 
 // ═══ Daily Summary (Итог дня) ═══
@@ -475,6 +551,7 @@ async function dailySummary() {
 
 function discussTheme(theme) {
   const msg = 'Тема «' + theme + '» снова повторилась в моих заметках. Почему она вообще образовалась? Помоги увидеть паттерн и связи между заметками — какие мысли и события её питают, к чему она ведёт.';
+  if (!newChat()) return;
   $('#chatInput').value = msg;
   navigateTo('chat');
   sendChat();
@@ -483,6 +560,7 @@ function discussTheme(theme) {
 // ═══ Tasks ═══
 async function loadTasks() {
   hideAllSections(); $('#tasksSection').style.display = 'block';
+  showListLoading('#tasksList');
   try {
     const tasks = await api('GET', '/tasks?date=' + selectedDate);
     const upcoming = await api('GET', '/tasks/upcoming');
@@ -524,14 +602,17 @@ function formatDueDate(date, time) {
   return time ? dateStr + ', ' + time : dateStr;
 }
 
+let taskCreating = false;
 async function createTask() {
   const title = $('#taskTitle').value.trim();
-  if (!title) return;
+  if (!title || taskCreating) return;
+  taskCreating = true;
   try {
-    await api('POST', '/tasks', { title, due_date: $('#taskDate').value || selectedDate, due_time: $('#taskTime').value, priority: parseInt($('#taskPriority').value) || 0 });
+    await runBusy($('#taskFormSubmit'), () => api('POST', '/tasks', { title, due_date: $('#taskDate').value || selectedDate, due_time: $('#taskTime').value, priority: parseInt($('#taskPriority').value) || 0 }));
     $('#taskTitle').value = ''; $('#taskTime').value = '';
     toast('задача создана'); await loadTasks();
-  } catch (e) { toast('ошибка'); }
+  } catch (e) { toast(apiErrorMessage(e)); }
+  finally { taskCreating = false; }
 }
 
 async function toggleTask(id) {
@@ -546,13 +627,23 @@ async function toggleTask(id) {
   } catch (e) {
     check.classList.toggle('checked', wasDone);
     if (card) card.classList.toggle('completed', wasDone);
-    toast('ошибка');
+    toast(apiErrorMessage(e));
   }
 }
 async function deleteTask(id) {
-  removeCardOf(`[data-task-delete="${id}"]`);
-  try { await api('DELETE', '/tasks/' + id); toast('удалено'); }
-  catch (e) { toast('ошибка'); await loadTasks(); }
+  const el = document.querySelector(`[data-task-delete="${id}"]`);
+  const card = el ? el.closest('.task-card') : null;
+  if (!card) return;
+  card.classList.add('deleting');
+  try {
+    await api('DELETE', '/tasks/' + id);
+    card.classList.remove('deleting');
+    removeCard(card);
+    toast('удалено');
+  } catch (e) {
+    card.classList.remove('deleting');
+    toast(apiErrorMessage(e));
+  }
 }
 async function toggleTaskFavorite(id) {
   const btn = document.querySelector(`[data-fav-task="${id}"]`);
@@ -567,13 +658,14 @@ async function toggleTaskFavorite(id) {
     toast(r.is_favorited ? 'в избранном' : 'убрано');
   } catch (e) {
     setStar(btn, wasFav); if (card) card.classList.toggle('favorited', wasFav);
-    toast('ошибка');
+    toast(apiErrorMessage(e));
   }
 }
 
 // ═══ Goals ═══
 async function loadGoals() {
   hideAllSections(); $('#goalsSection').style.display = 'block';
+  showListLoading('#goalsList');
   try {
     const data = await api('GET', '/goals');
     const active = data.active || [];
@@ -654,7 +746,7 @@ async function generateGoals() {
     setTimeout(() => { clearInterval(t); statusEl.style.display = 'none'; }, 90000);
   } catch (e) {
     statusEl.style.display = 'none';
-    toast(e.message || 'ошибка');
+    toast(apiErrorMessage(e));
   }
 }
 
@@ -670,23 +762,53 @@ async function toggleGoalPin(id) {
     if (r.is_pinned !== !wasPinned) { setStar(btn, r.is_pinned); if (card) card.classList.toggle('pinned', r.is_pinned); }
   } catch (e) {
     setStar(btn, wasPinned); if (card) card.classList.toggle('pinned', wasPinned);
-    toast('ошибка');
+    toast(apiErrorMessage(e));
   }
 }
 async function archiveGoal(id) {
-  removeCardOf(`[data-goal-archive="${id}"]`);
-  try { await api('POST', '/goals/' + id + '/archive'); toast('в архив'); }
-  catch (e) { toast('ошибка'); await loadGoals(); }
+  const el = document.querySelector(`[data-goal-archive="${id}"]`);
+  const card = el ? el.closest('.goal-card') : null;
+  if (!card) return;
+  card.classList.add('deleting');
+  try {
+    await api('POST', '/goals/' + id + '/archive');
+    card.classList.remove('deleting');
+    removeCard(card);
+    toast('в архив');
+  } catch (e) {
+    card.classList.remove('deleting');
+    toast(apiErrorMessage(e));
+  }
 }
 async function activateGoal(id) {
-  removeCardOf(`[data-goal-activate="${id}"]`);
-  try { await api('POST', '/goals/' + id + '/activate'); toast('возвращено в созвездие'); }
-  catch (e) { toast('ошибка'); await loadGoals(); }
+  const el = document.querySelector(`[data-goal-activate="${id}"]`);
+  const card = el ? el.closest('.goal-card') : null;
+  if (!card) return;
+  card.classList.add('deleting');
+  try {
+    await api('POST', '/goals/' + id + '/activate');
+    card.classList.remove('deleting');
+    removeCard(card);
+    toast('возвращено в созвездие');
+  } catch (e) {
+    card.classList.remove('deleting');
+    toast(apiErrorMessage(e));
+  }
 }
 async function deleteGoal(id) {
-  removeCardOf(`[data-goal-delete="${id}"]`);
-  try { await api('DELETE', '/goals/' + id); toast('удалено'); }
-  catch (e) { toast('ошибка'); await loadGoals(); }
+  const el = document.querySelector(`[data-goal-delete="${id}"]`);
+  const card = el ? el.closest('.goal-card') : null;
+  if (!card) return;
+  card.classList.add('deleting');
+  try {
+    await api('DELETE', '/goals/' + id);
+    card.classList.remove('deleting');
+    removeCard(card);
+    toast('удалено');
+  } catch (e) {
+    card.classList.remove('deleting');
+    toast(apiErrorMessage(e));
+  }
 }
 
 async function goalToProject(goalId, title) {
@@ -696,20 +818,20 @@ async function goalToProject(goalId, title) {
     renderProjects();
     toast('создан проект');
     openProject(p.id);
-  } catch (e) { toast(e.message || 'ошибка'); }
+  } catch (e) { toast(apiErrorMessage(e)); }
 }
 
 function discussGoal(goalId, title) {
+  if (!newChat()) return;
   openChatPanel();
-  newChat();
   const msg = `поговорим о моём направлении «${title}» — помоги увидеть его глубже`;
   const messagesEl = $('#chatMessages');
   messagesEl.innerHTML += `<div class="chat-msg user">${esc(msg)}</div>`;
   messagesEl.innerHTML += `<div class="chat-msg ai" id="chatLoading"><div class="ai-dot"></div> думаю...</div>`;
   messagesEl.scrollTop = messagesEl.scrollHeight;
-  api('POST', '/ai/chat', { message: msg, goal_id: goalId, session_id: null }).then(result => {
+  api('POST', '/ai/chat', { message: msg, goal_id: goalId, thread_id: null }, { timeoutMs: CHAT_TIMEOUT_MS }).then(result => {
     const loadingEl = $('#chatLoading'); if (loadingEl) loadingEl.remove();
-    if (result.session_id) currentSessionId = result.session_id;
+    if (result.thread_id) currentThreadId = result.thread_id;
     const parsed = parseChatReply(result.reply);
     messagesEl.innerHTML += chatMsgHtml('ai', parsed.text);
     if (result.saved && result.saved.text) {
@@ -725,9 +847,9 @@ function discussGoal(goalId, title) {
       messagesEl.innerHTML += `<div class="chat-note-refs"><div class="chat-note-refs-label">куратор ссылается на заметки — нажми, чтобы прочитать полностью</div>${refs}</div>`;
     }
     messagesEl.scrollTop = messagesEl.scrollHeight;
-  }).catch(() => {
+  }).catch((err) => {
     const loadingEl = $('#chatLoading'); if (loadingEl) loadingEl.remove();
-    messagesEl.innerHTML += `<div class="chat-msg ai">ошибка соединения</div>`;
+    messagesEl.innerHTML += `<div class="chat-msg ai">${esc(apiErrorMessage(err))}</div>`;
     messagesEl.scrollTop = messagesEl.scrollHeight;
   });
 }
@@ -784,7 +906,7 @@ async function createProjectFromPage() {
     renderProjects();
     toast('проект создан');
     openProject(p.id);
-  } catch (e) { toast(e.message || 'ошибка'); }
+  } catch (e) { toast(apiErrorMessage(e)); }
 }
 
 function closeProjectSilently() {
@@ -882,7 +1004,7 @@ async function saveProjectNote() {
     toast('в материалы проекта');
     await reloadProjectNotes();
     loadProjects();
-  } catch (e) { toast(e.message || 'ошибка'); }
+  } catch (e) { toast(apiErrorMessage(e)); }
 }
 
 function unassignProjectNote(noteId) {
@@ -890,7 +1012,7 @@ function unassignProjectNote(noteId) {
     toast('убрано из проекта');
     reloadProjectNotes();
     loadProjects();
-  }).catch(() => toast('ошибка'));
+  }).catch(err => toast(apiErrorMessage(err)));
 }
 
 function renderProjectChat(messages) {
@@ -907,13 +1029,14 @@ async function sendProjectChat() {
   const input = $('#projectChatInput');
   const msg = input.value.trim();
   if (!msg || !currentProjectId) return;
+  if ($('#projectChatLoading')) return;
   const messagesEl = $('#projectChatMessages');
   messagesEl.innerHTML += `<div class="chat-msg user">${esc(msg)}</div>`;
   input.value = '';
   messagesEl.innerHTML += `<div class="chat-msg ai" id="projectChatLoading"><div class="ai-dot"></div> думаю...</div>`;
   messagesEl.scrollTop = messagesEl.scrollHeight;
   try {
-    const result = await api('POST', '/ai/chat', { message: msg, project_id: currentProjectId });
+    const result = await api('POST', '/ai/chat', { message: msg, project_id: currentProjectId }, { timeoutMs: CHAT_TIMEOUT_MS });
     const loadingEl = $('#projectChatLoading'); if (loadingEl) loadingEl.remove();
     const parsed = parseChatReply(result.reply);
     messagesEl.innerHTML += chatMsgHtml('ai', parsed.text);
@@ -933,7 +1056,7 @@ async function sendProjectChat() {
     await reloadProjectNotes();
   } catch (e) {
     const loadingEl = $('#projectChatLoading'); if (loadingEl) loadingEl.remove();
-    messagesEl.innerHTML += `<div class="chat-msg ai">ошибка соединения</div>`;
+    messagesEl.innerHTML += `<div class="chat-msg ai">${esc(apiErrorMessage(e))}</div>`;
   }
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
@@ -956,7 +1079,7 @@ async function saveProjectName() {
     try {
       await api('PUT', '/projects/' + currentProjectId, { name });
       toast('переименовано');
-    } catch (e) { toast('ошибка'); }
+    } catch (e) { toast(apiErrorMessage(e)); }
   }
   loadProjects();
 }
@@ -970,7 +1093,7 @@ async function deleteProject() {
     toast('проект удалён');
     closeProject();
     loadProjects();
-  } catch (e) { toast('ошибка'); }
+  } catch (e) { toast(apiErrorMessage(e)); }
 }
 
 // ═══ Assign note to project ═══
@@ -1015,14 +1138,14 @@ async function assignNoteToProject(projectId) {
   try {
     await api('PUT', '/notes/' + assignNoteId, { project_id: projectId });
     toast('заметка в проекте');
-  } catch (e) { toast(e.message || 'ошибка'); }
+  } catch (e) { toast(apiErrorMessage(e)); }
   closeAssignModal();
   loadNotes();
   loadProjects();
 }
 
 // ═══ Chat ═══
-let currentSessionId = null;
+let currentThreadId = null;
 let currentProjectId = null;
 let projectsCache = [];
 
@@ -1101,11 +1224,15 @@ function initSwipe() {
 }
 
 function newChat() {
-  currentSessionId = null;
+  const hasUserMsgs = !!document.querySelector('#chatMessages .chat-msg.user');
+  if (hasUserMsgs && !confirm('начать новый диалог? этот сохранится в архиве')) return false;
+  currentThreadId = null;
+  $('#chatTitle').textContent = 'куратор';
   $('#chatMessages').innerHTML = '<div class="chat-msg ai">привет. я куратор — помогу структурировать мысли, найти связи, предложить инсайты. о чём думаешь?</div>';
   $('#archivePanel').style.display = 'none';
   $('#chatSection').classList.add('active');
   setTimeout(() => $('#chatInput').focus(), 100);
+  return true;
 }
 
 function parseChatReply(text) {
@@ -1165,7 +1292,7 @@ async function copyChatText(text) {
 }
 
 async function saveThought(text) {
-  try { await api('POST', '/ai/save-thought', { message: text }); toast('мысль сохранена'); } catch (e) { toast('ошибка'); }
+  try { await api('POST', '/ai/save-thought', { message: text }); toast('мысль сохранена'); } catch (e) { toast(apiErrorMessage(e)); }
 }
 
 function openNoteModal(note) {
@@ -1190,15 +1317,16 @@ function openNoteInNotes(date) {
 async function sendChat() {
   const input = $('#chatInput'); const msg = input.value.trim();
   if (!msg) return;
+  if ($('#chatLoading')) return;
   const messagesEl = $('#chatMessages');
   messagesEl.innerHTML += `<div class="chat-msg user">${esc(msg)}</div>`;
   input.value = '';
   messagesEl.innerHTML += `<div class="chat-msg ai" id="chatLoading"><div class="ai-dot"></div> думаю...</div>`;
   messagesEl.scrollTop = messagesEl.scrollHeight;
   try {
-    const result = await api('POST', '/ai/chat', { message: msg, session_id: currentSessionId });
+    const result = await api('POST', '/ai/chat', { message: msg, thread_id: currentThreadId }, { timeoutMs: CHAT_TIMEOUT_MS });
     const loadingEl = $('#chatLoading'); if (loadingEl) loadingEl.remove();
-    if (result.session_id) currentSessionId = result.session_id;
+    if (result.thread_id) currentThreadId = result.thread_id;
     const parsed = parseChatReply(result.reply);
     messagesEl.innerHTML += chatMsgHtml('ai', parsed.text);
     if (result.saved && result.saved.text) {
@@ -1215,7 +1343,7 @@ async function sendChat() {
     }
   } catch (e) {
     const loadingEl = $('#chatLoading'); if (loadingEl) loadingEl.remove();
-    messagesEl.innerHTML += `<div class="chat-msg ai">ошибка соединения</div>`;
+    messagesEl.innerHTML += `<div class="chat-msg ai">${esc(apiErrorMessage(e))}</div>`;
   }
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
@@ -1227,15 +1355,17 @@ function closeArchive() { $('#archivePanel').style.display = 'none'; $('#chatSec
 async function loadArchiveSessions() {
   const list = $('#archiveList'); list.innerHTML = '<div class="archive-empty">загрузка...</div>';
   try {
-    const sessions = await api('GET', '/chat/sessions');
-    if (!sessions.length) { list.innerHTML = '<div class="archive-empty">нет диалогов</div>'; return; }
-    list.innerHTML = sessions.map(s => {
-      const date = s.started ? formatArchiveDate(s.started) : 'ранее';
-      return `<div class="archive-session" data-session-id="${s.session_id}">
-        <div class="archive-session-date">${date}</div>
-        <div class="archive-session-preview">${esc(s.preview)}</div>
-        <div class="archive-session-count">${s.msg_count} сообщений</div>
-        <button class="btn btn-icon archive-session-delete" data-del-session="${s.session_id}" title="удалить">&#10005;</button>
+    const threads = await api('GET', '/chat/threads');
+    if (!threads.length) { list.innerHTML = '<div class="archive-empty">нет диалогов</div>'; return; }
+    list.innerHTML = threads.map(t => {
+      const date = t.ended || t.started;
+      const dateStr = date ? formatArchiveDate(date) : 'ранее';
+      const label = t.title || t.preview || 'диалог без названия';
+      return `<div class="archive-session" data-thread-id="${t.thread_id}">
+        <div class="archive-session-date">${dateStr}</div>
+        <div class="archive-session-preview">${esc(label)}</div>
+        <div class="archive-session-count">${t.msg_count} сообщений</div>
+        <button class="btn btn-icon archive-session-delete" data-del-thread="${t.thread_id}" title="удалить">&#10005;</button>
       </div>`;
     }).join('');
   } catch (e) { list.innerHTML = '<div class="archive-empty">ошибка загрузки</div>'; }
@@ -1266,30 +1396,33 @@ function formatArchiveDate(iso) {
   return fmtTimeMsk(iso, true);
 }
 
-async function openSessionInChat(sessionId) {
+async function openSessionInChat(threadId) {
   closeArchive();
   const messagesEl = $('#chatMessages');
   messagesEl.innerHTML = '<div class="chat-msg ai">загрузка...</div>';
   try {
-    const messages = await api('GET', '/chat/sessions/' + sessionId);
+    const messages = await api('GET', '/chat/threads/' + threadId);
     if (!messages.length) { messagesEl.innerHTML = '<div class="chat-msg ai">диалог пуст</div>'; return; }
     messagesEl.innerHTML = messages.map(m => {
       const role = m.role === 'assistant' ? 'ai' : 'user';
       return chatMsgHtml(role, m.content);
     }).join('');
-    currentSessionId = sessionId;
+    currentThreadId = threadId;
+    const threads = await api('GET', '/chat/threads').catch(() => []);
+    const t = threads.find(x => x.thread_id === threadId);
+    $('#chatTitle').textContent = (t && (t.title || t.preview)) ? (t.title || t.preview).slice(0, 40) : 'куратор';
   } catch (e) {
     messagesEl.innerHTML = '<div class="chat-msg ai">ошибка загрузки диалога</div>';
   }
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
-async function deleteSession(sessionId) {
-  try { await api('DELETE', '/chat/sessions/' + sessionId); loadArchiveSessions(); } catch (e) { toast('ошибка'); }
+async function deleteSession(threadId) {
+  try { await api('DELETE', '/chat/threads/' + threadId); loadArchiveSessions(); } catch (e) { toast(apiErrorMessage(e)); }
 }
 
 async function clearAllChat() {
-  try { await api('DELETE', '/chat/history'); loadArchiveSessions(); } catch (e) { toast('ошибка'); }
+  try { await api('DELETE', '/chat/history'); loadArchiveSessions(); } catch (e) { toast(apiErrorMessage(e)); }
 }
 
 async function searchArchive() {
@@ -1304,7 +1437,7 @@ async function searchArchive() {
     results.innerHTML = data.map(r => {
       const hl = r.snippet.replace(new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi'), '<mark>$1</mark>');
       const roleLabel = r.role === 'user' ? 'ты' : 'куратор';
-      return `<div class="archive-result" data-result-session="${r.session_id || 0}"><div class="archive-result-snippet">${roleLabel}: ${hl}</div><div class="archive-result-meta">${r.time ? formatArchiveDate(r.time) : ''}</div></div>`;
+      return `<div class="archive-result" data-result-thread="${r.thread_id || 0}"><div class="archive-result-snippet">${roleLabel}: ${hl}</div><div class="archive-result-meta">${r.time ? formatArchiveDate(r.time) : ''}</div></div>`;
     }).join('');
   } catch (e) { results.innerHTML = '<div class="archive-empty">ошибка поиска</div>'; }
 }
@@ -1402,12 +1535,16 @@ async function submitTikTok() {
     pollTikTok(res.id);
   } catch (e) {
     $('#tiktokStatus').style.display = 'none';
-    toast(e.message || 'ошибка');
+    toast(apiErrorMessage(e));
   }
   btn.textContent = 'СОХРАНИТЬ'; btn.disabled = false;
 }
 
 // ═══ Helpers ═══
+function showListLoading(listSel) {
+  const el = $(listSel);
+  if (el && !el.children.length) el.innerHTML = '<div class="list-loading">загружаю...</div>';
+}
 function hideAllSections() {
   $('#notesSection').style.display = 'none';
   $('#tasksSection').style.display = 'none';
@@ -1423,6 +1560,7 @@ function autoResize() { const i = $('#noteInput'); i.style.height = 'auto'; i.st
 function updateCharCount() { $('#charCount').textContent = $('#noteInput').value.length; }
 
 async function downloadBackup() {
+  setButtonsBusy('#btnBackup, .btn-backup-mobile', true);
   try {
     const data = await api('GET', '/backup');
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -1432,10 +1570,12 @@ async function downloadBackup() {
     a.download = `curator-v3-${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
     a.click(); URL.revokeObjectURL(url);
     toast(`бекап: ${data.stats.notes} заметок, ${data.stats.tasks} задач, ${data.stats.dreams} записей о снах`);
-  } catch (e) { toast('ошибка бекапа'); }
+  } catch (e) { toast(apiErrorMessage(e)); }
+  finally { setButtonsBusy('#btnBackup, .btn-backup-mobile', false); }
 }
 
 async function reanalyzeNotes() {
+  setButtonsBusy('#btnReanalyze, .btn-reanalyze-mobile', true);
   try {
     const data = await api('POST', '/notes/reanalyze');
     if (data.reanalyzed > 0) {
@@ -1443,7 +1583,8 @@ async function reanalyzeNotes() {
     } else {
       toast('все заметки уже проанализированы');
     }
-  } catch (e) { toast('ошибка переанализа'); }
+  } catch (e) { toast(apiErrorMessage(e)); }
+  finally { setButtonsBusy('#btnReanalyze, .btn-reanalyze-mobile', false); }
 }
 
 // ═══ Mobile Drawer ═══
@@ -1547,6 +1688,7 @@ function initSelectionToolbar() {
 
   $('#selAsk').addEventListener('click', () => {
     if (!selectedText) return;
+    if (!newChat()) return;
     $('#chatInput').value = 'расскажи подробнее: "' + selectedText + '"';
     $('#chatInput').focus();
     clearSelection();
@@ -1591,7 +1733,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Note input
   const noteInput = $('#noteInput');
-  noteInput.addEventListener('input', () => { autoResize(); updateCharCount(); });
+  noteInput.addEventListener('input', () => { autoResize(); updateCharCount(); saveDraft(); });
   noteInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveNote(); } });
   $('#saveBtn').addEventListener('click', saveNote);
 
@@ -1620,6 +1762,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!item) return;
     const relatedText = (item.dataset.relatedText || '').slice(0, 300);
     const draft = $('#noteInput').value.trim().slice(0, 200);
+    if (!newChat()) return;
     $('#chatInput').value = 'Моя прошлая заметка: «' + relatedText + '». А сейчас я пишу: «' + draft + '». Как это связано?';
     hideHeadsUp();
     navigateTo('chat');
@@ -1719,13 +1862,13 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#archiveBack').addEventListener('click', closeArchive);
   $('#archiveClearAll').addEventListener('click', clearAllChat);
   $('#archiveSearch').addEventListener('input', debounce(searchArchive, 300));
-  $('#archiveList').addEventListener('click', e => {
+$('#archiveList').addEventListener('click', e => {
     const del = e.target.closest('.archive-session-delete');
-    if (del) { e.stopPropagation(); deleteSession(parseInt(del.dataset.delSession)); return; }
-    const s = e.target.closest('[data-session-id]');
-    if (s) openSessionInChat(parseInt(s.dataset.sessionId));
+    if (del) { deleteSession(parseInt(del.dataset.delThread)); return; }
+    const s = e.target.closest('[data-thread-id]');
+    if (s) openSessionInChat(parseInt(s.dataset.threadId));
   });
-  $('#archiveResults').addEventListener('click', e => { const r = e.target.closest('[data-result-session]'); if (r) openSessionInChat(parseInt(r.dataset.resultSession)); });
+  $('#archiveResults').addEventListener('click', e => { const r = e.target.closest('[data-result-thread]'); if (r) openSessionInChat(parseInt(r.dataset.resultThread)); });
   const chatBackBtn = $('#chatBackBtn');
   if (chatBackBtn) chatBackBtn.addEventListener('click', closeChatPanel);
   const chatCloseBtn = $('#chatCloseBtn');
@@ -1799,9 +1942,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (unassign) { unassignProjectNote(parseInt(unassign.dataset.pnoteUnassign)); return; }
     const discuss = e.target.closest('[data-pnote-discuss]');
     if (discuss) {
-      $('#chatInput').value = 'Расскажи подробнее об этой мысли: "' + (discuss.dataset.pnoteText || '').slice(0, 200) + '"';
       closeProject();
-      setTimeout(() => $('#chatInput').focus(), 100);
+      setTimeout(() => discussWithCurator(discuss.dataset.pnoteText || ''), 50);
     }
   });
   $('#projectChatMessages').addEventListener('click', e => {

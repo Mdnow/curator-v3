@@ -60,6 +60,7 @@
 .chat-title {
   flex: 1; font-size: var(--font-xs); color: var(--text-3);
   text-transform: uppercase; letter-spacing: 0.08em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .chat-input-row {
   display: flex; gap: var(--space-xs); align-items: center;

@@ -92,5 +92,6 @@ button, .task-check, .note-expand-btn, .goals-archived-toggle {
 }
 button:active:not(:disabled) { transform: scale(0.94); }
 .task-check:active { transform: scale(0.88); }
-button:disabled { cursor: default; }
+button:disabled { cursor: default; opacity: 0.55; }
+button:disabled:hover { transform: none; background: none; }
 .note-fav.pop, .task-fav.pop, .goal-pin.pop { animation: starPop 0.28s ease; }

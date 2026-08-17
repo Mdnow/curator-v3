@@ -28,3 +28,19 @@
   transform: scale(0.96);
   transition: opacity 0.18s ease, transform 0.18s ease !important;
 }
+
+/* Пока идёт запрос: карточка «удаляю» не исчезает до ответа сервера */
+.deleting {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+/* Индикатор загрузки списка — экран не выглядит сломанным при медленной сети */
+.list-loading {
+  padding: var(--space-lg) 0;
+  text-align: center;
+  color: var(--text-3);
+  font-size: var(--font-sm);
+  animation: pulse 1.5s ease infinite;
+}
