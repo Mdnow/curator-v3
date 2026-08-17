@@ -1066,3 +1066,30 @@ iPhone 12 Pro Max: портрет 428px, ландшафт 926px. Портрет 
 ### 32.5. Замечания
 - Полностью убрать системный тулбар iOS нельзя (Safari не даёт); решение — наша кнопка внизу, в зоне досягаемости пальца и вне зоны системного меню.
 - `pending_commits`/git-sync (daily-os) — в отдельном журнале daily-os, к этому разделу не относится.
+
+## 33. 17.08.2026 — независимый анализ проекта и чистка мёртвого кода
+
+### 33.1. Задача
+Пользователь: «сделай независимый анализ всего проекта и кода и почисти его от мёртвых кодов и ненужных вещей».
+
+### 33.2. Метод
+- Детекторы: `deadjs.py` (функции JS, вхождений ≤ объявлений), `deadcss.py` (CSS-селекторы vs. употребления в HTML/JS), сравнение API-вызовов фронта с маршрутами бэкенда.
+- Каждый кандидат верифицирован вручную: динамически генерируемые классы (`p${priority}`, `completed`, `checked`, `overdue`, `selected`, `today`, `archive-result*`, `projects-add-form`) — оставлены.
+
+### 33.3. Удалено (коммит `7a01837`)
+- **JS** (`app.js`): `createProject`, `createProjectMobile`, `showAddProjectForm` (старые формы сайдбара/drawer от «добавка 11»), `goToday` (осталась без вызовов после удаления кнопок «сегодня»), null-safe обработчики `#btnToday`/`.btn-today-mobile`.
+- **CSS**: `#btnToday`/`.today-icon`, `.cal-day.has-dreams` (layout); секция сайдбара `.projects-sidebar/.projects-header/.projects-title/.projects-add-btn/.projects-list` (projects — `.projects-add-form` оставлен, им пользуется раздел «Проекты»); `.chat-save-prompt/.chat-save-text/.archive-view/.archive-msg/.archive-back-row` (chat); `.note-ai-summary/.note-tag/.note-tags` (notes); `patterns.css` сжат до `.patterns-loading`; в mobile.css — `#dreamsSection`+весь dream-блок, `.btn-today-mobile`, `.drawer-section-title`, `.page-enter`+`@keyframes pageSlideIn`, `.projects-list-mobile`, `.archive-msg`.
+- **Файлы**: `frontend/css/dreams.css`, `frontend/css/daymap.css` (не подключались в index.html, разделы свёрнуты ещё 14.08).
+- Кэш-бастеры: layout v8, notes v12, chat v11, patterns v7, projects v5, mobile v13, app.js v22.
+
+### 33.4. Не тронуто (осознанно)
+- Бэкенд: `ruff`/`py_compile` чисто, все функции — эндпоинты роутеров. `/api/dreams/*`, `/api/day-map/*`, `/api/favorites` фронт не вызывает — но это рабочая API-поверхность с данными в БД; удаление только по явному решению пользователя.
+- В рабочем дереве лежала незакоммиченная работа по Goals-слою (цель-диалог `goal_id` + кнопка «в проект») — вынесена отдельным коммитом `e8969c3`.
+
+### 33.5. Проверка
+- `ruff check backend` OK; `py_compile` (весь backend) OK; `node --check app.js` OK; TestClient: GET / 200, разметка чат-панели на месте, статика 200.
+- Прод: health 200, index 200, `layout.css?v=8`/`app.js?v=22` на проде, ссылок на dreams/daymap нет.
+- Интеграционные тесты не гонялись: бэкенд не менялся, а они требуют прод-Neon/AI (VPN).
+
+### 33.6. Замечания
+- Детекторы — разовые скрипты в `Temp\opencode\` (deadjs.py, deadcss.py, verify_classes.py) — можно переиспользовать при следующей большой ревизии.
