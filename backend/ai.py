@@ -17,14 +17,12 @@ OPENROUTER_MODELS = [
 ]
 
 ZEN_MODELS = [
-    "big-pickle",
     "deepseek-v4-flash-free",
+    "nemotron-3.5-lightning-free",
     "nemotron-3-ultra-free",
+    "hy3-free",
     "mimo-v2.5-free",
-    "longcat-2.0-free",
     "laguna-s-2.1-free",
-    "ling-3.0-tiny-free",
-    "north-mini-code-free",
 ]
 
 EMBED_MODEL = "nvidia/nemotron-3-embed-1b:free"
