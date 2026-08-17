@@ -1,3 +1,4 @@
+import json
 import re
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from backend.db import get_db
@@ -246,11 +247,46 @@ async def ai_chat(
                 f"- {t}" for t in fav_notes
             )
 
+        goal_context = ""
+        if req.goal_id is not None:
+            goal_row = await db.fetchrow(
+                "SELECT title, description, evidence, thread_ids FROM goals WHERE id=$1 AND user_id=$2",
+                req.goal_id,
+                user_id,
+            )
+            if goal_row:
+                try:
+                    evidence = (
+                        json.loads(goal_row["evidence"]) if goal_row["evidence"] else []
+                    )
+                    thread_ids = (
+                        json.loads(goal_row["thread_ids"])
+                        if goal_row["thread_ids"]
+                        else []
+                    )
+                except Exception:
+                    evidence, thread_ids = [], []
+                quotes = "\n".join(
+                    f"- «{e.get('quote', '')}»" for e in evidence if e.get("quote")
+                )
+                goal_context = (
+                    "\n\nЦЕЛЬ (направление пользователя, о котором он просит поговорить):\n"
+                    f"Название: {goal_row['title']}\n"
+                    f"Описание: {goal_row['description'] or ''}\n"
+                )
+                if quotes:
+                    goal_context += "Подтверждения из заметок:\n" + quotes
+                if thread_ids:
+                    goal_context += "\nСвязанные темы: " + ", ".join(
+                        str(t) for t in thread_ids
+                    )
+
         system = (
             CHAT_SYSTEM
             + ("\n".join(notes) if notes else "Заметок пока нет.")
             + pattern_block
             + fav_context
+            + goal_context
         )
 
         result = await chat_with_context(history, system=system)

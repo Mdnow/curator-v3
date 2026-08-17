@@ -35,6 +35,12 @@
 .goal-card:hover .goal-archive, .goal-card:hover .goal-activate { opacity: 1; }
 .goal-archive:hover { color: var(--text-2); background: var(--surface-hover); }
 .goal-activate:hover { color: var(--accent); background: var(--accent-bg); }
+.goal-project, .goal-chat {
+  background: none; border: 1px solid var(--border); color: var(--accent);
+  cursor: pointer; font-size: var(--font-xs); padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-xs); transition: all 0.15s;
+}
+.goal-project:hover, .goal-chat:hover { background: var(--accent-bg); border-color: var(--accent); }
 .goal-delete {
   background: none; border: none; color: var(--text-3); cursor: pointer;
   font-size: var(--font-xs); padding: var(--space-xs); border-radius: var(--radius-xs);

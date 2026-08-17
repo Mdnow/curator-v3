@@ -159,6 +159,7 @@ class ChatReq(BaseModel):
     message: str
     session_id: Optional[int] = None
     project_id: Optional[int] = None
+    goal_id: Optional[int] = None
 
     @field_validator("message")
     @classmethod
