@@ -35,7 +35,7 @@ if ZEN_API_KEY:
             "url": ZEN_URL,
             "key": ZEN_API_KEY,
             "models": ZEN_MODELS,
-            "extra": {},
+            "extra": {"reasoning": {"exclude": True}},
         }
     )
 if OPENROUTER_API_KEY:
@@ -204,6 +204,19 @@ DAY_ESSENCE_PROMPT = """Ты — когнитивное зеркало. Посм
 AI_LAST_ERROR = ""
 
 
+def _is_reasoning_noise(content: str) -> bool:
+    """Ответ-размышление модели («Here's a thinking process…»), а не ответ пользователю."""
+    if not content:
+        return False
+    head = content.strip()[:80].lower()
+    return (
+        head.startswith("here's a thinking process")
+        or head.startswith("i'll think")
+        or head.startswith("let me think")
+        or head.startswith("i need to")
+    )
+
+
 def _parse_json_content(content: str | None) -> dict | None:
     if not content:
         return None
@@ -261,7 +274,12 @@ async def _request_model(
             return None
         r.raise_for_status()
         content = r.json()["choices"][0]["message"]["content"]
-        return content or None
+        if not content:
+            return None
+        if _is_reasoning_noise(content):
+            print(f"[ai] {model} -> reasoning-noise", flush=True)
+            return None
+        return content
     except Exception as e:
         print(f"[ai] {model} -> EXC {type(e).__name__}: {str(e)[:150]}", flush=True)
         return None
