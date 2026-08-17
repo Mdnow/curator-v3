@@ -148,7 +148,7 @@ async function loadDateMarkers() {
 
 function calNav(dir) { calMonth += dir; if (calMonth > 11) { calMonth = 0; calYear++; } if (calMonth < 0) { calMonth = 11; calYear--; } renderCalendar(); }
 function selectDate(ds) { selectedDate = ds; renderCalendar(); renderPageTitle(); loadPageData(); if (isMobile() && drawerOpen) closeDrawer(); }
-function goToday() { selectedDate = todayStr(); const n = new Date(); calYear = n.getFullYear(); calMonth = n.getMonth(); renderCalendar(); renderPageTitle(); loadPageData(); if (isMobile() && drawerOpen) closeDrawer(); }
+
 
 function renderPageTitle() {
   const d = new Date(selectedDate + 'T12:00:00');
@@ -160,8 +160,6 @@ function renderPageTitle() {
   } else {
     $('#pageSubtitle').textContent = today ? RU_DAYS[d.getDay()] : fmtDate(selectedDate);
   }
-  const todayBtn = $('#btnToday');
-  if (todayBtn) todayBtn.classList.toggle('active', today);
   updateMobileHeader();
 }
 
@@ -544,7 +542,9 @@ function renderGoal(goal, maxCount = 1, isArchived = false) {
   const pinBtn = isArchived ? '' : `<button class="goal-pin" data-goal-pin="${goal.id}" title="закрепить">${goal.is_pinned ? '&#9733;' : '&#9734;'}</button>`;
   const actions = isArchived
     ? `<button class="goal-activate" data-goal-activate="${goal.id}" title="вернуть в созвездие">вернуть</button>`
-    : `<button class="goal-archive" data-goal-archive="${goal.id}" title="убрать из зеркала">в архив</button>`;
+    : `<button class="goal-project" data-goal-project="${goal.id}" data-goal-project-title="${escAttr(goal.title)}" title="сделать проект">в проект</button>
+       <button class="goal-chat" data-goal-chat="${goal.id}" data-goal-chat-title="${escAttr(goal.title)}" title="поговорить о направлении">поговорить</button>
+       <button class="goal-archive" data-goal-archive="${goal.id}" title="убрать из зеркала">в архив</button>`;
   return `<div class="goal-card ${goal.is_pinned ? 'pinned' : ''} ${isArchived ? 'archived' : ''}">
     <div class="goal-header">
       ${pinBtn}
@@ -601,6 +601,49 @@ async function deleteGoal(id) {
   try { await api('DELETE', '/goals/' + id); toast('удалено'); await loadGoals(); } catch (e) { toast('ошибка'); }
 }
 
+async function goalToProject(goalId, title) {
+  try {
+    const p = await api('POST', '/projects', { name: title || 'проект по цели' });
+    projectsCache.push(p);
+    renderProjects();
+    toast('создан проект');
+    openProject(p.id);
+  } catch (e) { toast(e.message || 'ошибка'); }
+}
+
+function discussGoal(goalId, title) {
+  openChatPanel();
+  newChat();
+  const msg = `поговорим о моём направлении «${title}» — помоги увидеть его глубже`;
+  const messagesEl = $('#chatMessages');
+  messagesEl.innerHTML += `<div class="chat-msg user">${esc(msg)}</div>`;
+  messagesEl.innerHTML += `<div class="chat-msg ai" id="chatLoading"><div class="ai-dot"></div> думаю...</div>`;
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  api('POST', '/ai/chat', { message: msg, goal_id: goalId, session_id: null }).then(result => {
+    const loadingEl = $('#chatLoading'); if (loadingEl) loadingEl.remove();
+    if (result.session_id) currentSessionId = result.session_id;
+    const parsed = parseChatReply(result.reply);
+    messagesEl.innerHTML += chatMsgHtml('ai', parsed.text);
+    if (result.saved && result.saved.text) {
+      messagesEl.innerHTML += `<div class="chat-auto-saved">куратор сохранил это в заметки</div>`;
+    }
+    if (result.note_refs && result.note_refs.length) {
+      const refs = result.note_refs.map(n =>
+        `<button class="chat-note-ref" data-note-id="${n.id}" data-note-content="${escAttr(n.content)}" data-note-date="${escAttr(n.note_date)}" data-note-title="${escAttr(noteTitle(n))}">` +
+          `<span class="chat-note-ref-title">${esc(noteTitle(n))}</span>` +
+          `<span class="chat-note-ref-date">${esc(fmtDate(n.note_date))}</span>` +
+        `</button>`
+      ).join('');
+      messagesEl.innerHTML += `<div class="chat-note-refs"><div class="chat-note-refs-label">куратор ссылается на заметки — нажми, чтобы прочитать полностью</div>${refs}</div>`;
+    }
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }).catch(() => {
+    const loadingEl = $('#chatLoading'); if (loadingEl) loadingEl.remove();
+    messagesEl.innerHTML += `<div class="chat-msg ai">ошибка соединения</div>`;
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  });
+}
+
 // ═══ Projects ═══
 async function loadProjects() {
   try {
@@ -652,44 +695,6 @@ async function createProjectFromPage() {
     projectsCache.push(p);
     renderProjects();
     toast('проект создан');
-    openProject(p.id);
-  } catch (e) { toast(e.message || 'ошибка'); }
-}
-
-function showAddProjectForm() {
-  const form = $('#projectsAddForm');
-  const input = $('#projectsAddInput');
-  form.style.display = form.style.display === 'none' ? 'block' : 'none';
-  if (form.style.display === 'block') input.focus();
-}
-
-async function createProject() {
-  const input = $('#projectsAddInput');
-  const name = input.value.trim();
-  input.value = '';
-  $('#projectsAddForm').style.display = 'none';
-  if (!name) return;
-  try {
-    const p = await api('POST', '/projects', { name });
-    projectsCache.push(p);
-    renderProjects();
-    toast('проект создан');
-    openProject(p.id);
-  } catch (e) { toast(e.message || 'ошибка'); }
-}
-
-async function createProjectMobile() {
-  const input = $('#projectsAddInputMobile');
-  const name = input.value.trim();
-  input.value = '';
-  $('#projectsAddFormMobile').style.display = 'none';
-  if (!name) return;
-  try {
-    const p = await api('POST', '/projects', { name });
-    projectsCache.push(p);
-    renderProjects();
-    toast('проект создан');
-    closeDrawer();
     openProject(p.id);
   } catch (e) { toast(e.message || 'ошибка'); }
 }
@@ -1491,10 +1496,6 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#drawerOverlay').addEventListener('click', closeDrawer);
 
   // Calendar
-  const todayBtn = $('#btnToday');
-  if (todayBtn) todayBtn.addEventListener('click', goToday);
-  const mobileTodayBtn = $('.btn-today-mobile');
-  if (mobileTodayBtn) mobileTodayBtn.addEventListener('click', goToday);
   $('#calDays').addEventListener('click', e => { const day = e.target.closest('[data-date]'); if (day) selectDate(day.dataset.date); });
   const calDaysMobile = $('#calDaysMobile');
   if (calDaysMobile) calDaysMobile.addEventListener('click', e => { const day = e.target.closest('[data-date]'); if (day) selectDate(day.dataset.date); });
@@ -1589,6 +1590,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (arc) { archiveGoal(parseInt(arc.dataset.goalArchive)); return; }
     const act = e.target.closest('[data-goal-activate]');
     if (act) { activateGoal(parseInt(act.dataset.goalActivate)); return; }
+    const proj = e.target.closest('[data-goal-project]');
+    if (proj) { goalToProject(parseInt(proj.dataset.goalProject), proj.dataset.goalProjectTitle); return; }
+    const chatBtn = e.target.closest('[data-goal-chat]');
+    if (chatBtn) { discussGoal(parseInt(chatBtn.dataset.goalChat), chatBtn.dataset.goalChatTitle); return; }
     const del = e.target.closest('[data-goal-delete]');
     if (del) { deleteGoal(parseInt(del.dataset.goalDelete)); return; }
     const toggle = e.target.closest('[data-archived-toggle]');

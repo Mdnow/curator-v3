@@ -232,14 +232,6 @@
     padding: 8px 12px;
   }
 
-  .drawer-section-title {
-    font-size: var(--font-xs);
-    color: var(--text-3);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    padding: 8px 8px 4px;
-  }
-
   .drawer-btn {
     display: flex;
     align-items: center;
@@ -267,12 +259,6 @@
     cursor: pointer;
   }
   .drawer-user:active { color: var(--text-2); }
-
-  .btn-today-mobile {
-    justify-content: center;
-    color: var(--text-3);
-  }
-  .btn-today-mobile .today-icon { width: 20px; height: 20px; }
 
   /* ── Calendar in Drawer ── */
   .mobile-calendar {
@@ -316,22 +302,6 @@
     color: #faf6ee;
     border-radius: 50%;
     font-weight: 600;
-  }
-
-  /* ── Page Transitions ── */
-  .page-enter {
-    animation: pageSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-
-  @keyframes pageSlideIn {
-    from {
-      opacity: 0;
-      transform: translateY(12px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
   }
 
   /* ── Page Header (mobile) ── */
@@ -524,84 +494,6 @@
 
   .tasks-list {
     gap: 6px;
-  }
-
-  /* ═══ DREAMS MOBILE ═══ */
-  #dreamsSection {
-    padding: 0 0 80px;
-  }
-
-  .dream-mode-toggle {
-    margin: 12px 16px;
-    border-radius: var(--radius-md);
-  }
-
-  .dream-mode {
-    padding: 14px;
-    font-size: var(--font-md);
-  }
-
-  .dream-panel {
-    padding: 0 16px;
-  }
-
-  .dream-prompt {
-    font-size: var(--font-xl);
-    padding: 0 8px;
-    margin-bottom: 20px;
-  }
-
-  .dream-input {
-    font-size: 16px;
-    padding: 16px;
-    min-height: 140px;
-    border-radius: var(--radius-lg);
-  }
-
-  .dream-emotion,
-  .dream-quality {
-    padding: 16px;
-    border-radius: var(--radius-md);
-    margin: 0 0 12px;
-  }
-
-  .dream-meta {
-    padding: 0;
-    margin-bottom: 16px;
-  }
-
-  .dream-meta input {
-    padding: 10px 14px;
-    font-size: 16px;
-    border-radius: var(--radius-sm);
-  }
-
-  .dream-submit {
-    margin: 0 16px;
-    width: calc(100% - 32px);
-    padding: 16px;
-    font-size: var(--font-lg);
-    border-radius: var(--radius-md);
-  }
-
-  .dream-insight {
-    margin: 16px;
-    padding: 20px;
-    border-radius: var(--radius-md);
-  }
-
-  .dream-history {
-    padding: 0 16px;
-  }
-
-  .dream-history-item {
-    padding: 16px;
-    border-radius: var(--radius-md);
-    margin-bottom: 8px;
-  }
-
-  .dream-history-content {
-    font-size: 16px;
   }
 
   /* ═══ CHAT PANEL MOBILE ═══ */
@@ -859,10 +751,6 @@
     line-height: 1.4;
   }
 
-  .projects-list-mobile {
-    max-height: none;
-  }
-
   /* ── Archive Mobile ── */
   .archive-panel {
     position: fixed;
@@ -904,13 +792,6 @@
 
   .archive-session-count {
     width: 100%;
-  }
-
-  .archive-msg {
-    padding: 12px 16px;
-    font-size: 16px;
-    border-radius: 16px;
-    max-width: 90% !important;
   }
 
   /* ═══ TIKTOK MOBILE ═══ */
@@ -959,7 +840,6 @@
   .mobile-bottom-bar,
   .mobile-header,
   .mobile-drawer,
-  .dream-mode-toggle,
   .note-input-footer,
   .task-form {
     user-select: none;

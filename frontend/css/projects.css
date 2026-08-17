@@ -3,19 +3,7 @@
    Контейнеры: имя + диалог + материалы (заметки)
    ═══════════════════════════════════════════ */
 
-/* ── Список проектов в сайдбаре ── */
-.projects-sidebar {
-  display: flex; flex-direction: column; gap: var(--space-sm);
-}
-.projects-header {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-top: var(--space-sm);
-}
-.projects-title {
-  font-size: var(--font-xs); color: var(--text-3);
-  text-transform: uppercase; letter-spacing: 0.08em;
-}
-.projects-add-btn { padding: 2px 8px; font-size: var(--font-sm); }
+/* ── Форма создания проекта (раздел «Проекты») ── */
 .projects-add-form {
   display: flex; flex-direction: column; gap: var(--space-xs);
 }
@@ -26,10 +14,7 @@
   font-size: var(--font-sm); outline: none; transition: border-color 0.2s;
 }
 .projects-add-form input:focus { border-color: var(--border-focus); }
-.projects-list {
-  display: flex; flex-direction: column; gap: var(--space-xs);
-  max-height: 240px; overflow-y: auto;
-}
+
 .project-item {
   display: flex; align-items: center; gap: var(--space-sm);
   background: var(--surface); border: 1px solid var(--border);

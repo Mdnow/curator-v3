@@ -77,7 +77,6 @@
   padding: var(--space-sm); background: var(--accent-bg); border-radius: var(--radius-xs);
 }
 .note-ai-category { font-size: var(--font-xs); font-weight: 500; color: var(--accent); letter-spacing: 0.05em; }
-.note-ai-summary { font-size: var(--font-xs); color: var(--text-2); line-height: 1.5; }
 .note-ai-theses { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; }
 .note-ai-thesis { font-size: var(--font-xs); color: var(--text-2); line-height: 1.5; padding-left: 10px; position: relative; }
 .note-ai-thesis::before { content: '—'; position: absolute; left: 0; color: var(--accent); }
@@ -92,8 +91,6 @@
 }
 .note-expand-btn:hover { background: var(--accent-bg); }
 .note-time { font-size: var(--font-xs); color: var(--text-3); font-variant-numeric: tabular-nums; }
-.note-tags { display: flex; gap: var(--space-xs); flex-wrap: wrap; }
-.note-tag { font-size: var(--font-xs); color: var(--accent); background: var(--accent-bg); padding: 2px 8px; border-radius: var(--radius-xs); }
 .note-mood { font-size: var(--font-xs); color: var(--text-3); }
 .note-delete {
   background: none; border: none; color: var(--text-3); cursor: pointer;
