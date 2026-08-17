@@ -1019,11 +1019,40 @@ function parseChatReply(text) {
   return { text, saveable: null };
 }
 
+// Куратор иногда отвечает markdown-разметкой («закорючки»: **, #, |, `).
+// Убираем её при отображении, чтобы чат читался как чистый текст.
+function cleanChatText(text) {
+  if (!text) return '';
+  let t = String(text);
+  // таблицы: | ячейка | ячейка | -> убрать разделители
+  t = t.replace(/^\s*\|.*\|\s*$/gm, (row) => {
+    const cells = row.replace(/^\s*\|\s*/, '').replace(/\s*\|\s*$/, '').split('|').map(c => c.trim()).filter(Boolean);
+    return cells.join(' · ');
+  });
+  t = t.replace(/^\s*\|[-:\s|]*\|\s*$/gm, '');
+  // жирный и курсив
+  t = t.replace(/\*\*([^*]+)\*\*/g, '$1');
+  t = t.replace(/\*([^*]+)\*/g, '$1');
+  t = t.replace(/\*\*/g, '');
+  // inline-код
+  t = t.replace(/`([^`]*)`/g, '$1');
+  // заголовки
+  t = t.replace(/^#{1,6}\s+/gm, '');
+  // маркеры списков
+  t = t.replace(/^\s*[-*+]\s+/gm, '');
+  // ссылки [текст](url)
+  t = t.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+  // зачёркивание
+  t = t.replace(/~~([^~]+)~~/g, '$1');
+  return t.trim();
+}
+
 function chatMsgHtml(role, text) {
+  const clean = role === 'ai' ? cleanChatText(text) : text;
   const copyBtn = role === 'ai'
-    ? `<button class="chat-copy" data-copy="${escAttr(text)}" title="копировать">&#10697;</button>`
+    ? `<button class="chat-copy" data-copy="${escAttr(clean)}" title="копировать">&#10697;</button>`
     : '';
-  return `<div class="chat-msg ${role}">${esc(text).replace(/\n/g, '<br>')}${copyBtn}</div>`;
+  return `<div class="chat-msg ${role}">${esc(clean).replace(/\n/g, '<br>')}${copyBtn}</div>`;
 }
 
 async function copyChatText(text) {
