@@ -767,3 +767,30 @@
 **Открыто:**
 - [ ] Подтвердить, что новый код реально на проде (пере-смоук одной задачей) и повторить переобработку 21/22/23, когда скажет пользователь.
 - [ ] Прод-недоступность с машины без VPN (render.com не резолвится/таймаутит из РФ) — не баг приложения, рабочая особенность (VPN_SERVICES.md).
+
+---
+
+## Сессия: 2026-08-17 (добавка 12) — независимый анализ проекта и чистка мёртвого кода
+
+**Тема:** пользователь: «сделай независимый анализ всего проекта и кода и почисти его от мёртвых кодов и ненужных вещей».
+
+**Анализ (метод):**
+- Скрипты-детекторы: собрали все функции/классы JS (`deadjs.py`), CSS-селекторы vs. использования в HTML/JS (`deadcss.py`), функции/маршруты backend.
+- Каждый кандидат верифицирован: динамические классы (`p${priority}`, `completed`, `checked`, `overdue`, `selected`, `today`, `archive-result*`, `projects-add-form`) — оставлены.
+
+**Удалено (коммит `7a01837`, чистка):**
+- **JS** (`app.js`): мёртвые функции `createProject`, `createProjectMobile`, `showAddProjectForm` (старые формы сайдбара/drawer), `goToday` (осталась без вызовов), null-safe обработчики `#btnToday` и `.btn-today-mobile` (элементы удалены ранее).
+- **CSS**: `#btnToday` и `.cal-day.has-dreams` (layout), секция сайдбара `.projects-sidebar/.projects-header/.projects-title/.projects-add-btn/.projects-list` (projects, `.projects-add-form` оставлен — используется разделом «Проекты»), `.chat-save-*`/`.archive-view/.archive-msg/.archive-back-row` (chat), `.note-ai-summary/.note-tag/.note-tags` (notes), `patterns.css` сжат до `.patterns-loading` (единственный используемый), в mobile — `.btn-today-mobile/.drawer-section-title/.page-enter+pageSlideIn/.projects-list-mobile/.archive-msg/весь блок DREAMS`.
+- **Файлы**: удалены не подключаемые `frontend/css/dreams.css` и `frontend/css/daymap.css`.
+- Кэш-бастеры: layout v8, notes v12, chat v11, patterns v7, projects v5, mobile v13, app.js v22.
+
+**Не тронуто (осознанно):**
+- Бэкенд: `ruff`/`py_compile` чисто, все функции — эндпоинты роутеров (не мёртвый код). API `/api/dreams/*`, `/api/day-map/*`, `/api/favorites` фронт не вызывает, но это рабочая API-поверхность с данными в БД — удаление требует решения пользователя.
+
+**Также закоммичено** (`e8969c3`): незакоммиченная работа по Goals-слою из более ранней сессии 17.08 — цель-диалог (`goal_id` в контекст `/api/ai/chat`) и кнопка «в проект» (POST /projects) — лежала в рабочем дереве.
+
+**Проверено:** `ruff check` OK, `py_compile` OK (весь backend), `node --check` OK, TestClient: GET / 200, разметка чат-панели на месте, статика 200. Прод: health 200, index 200, layout.css?v=8 и app.js?v=22 на проде, ссылок на dreams/daymap нет. Push `0709563..7a01837` → автодеплой Render.
+
+**Открыто:**
+- [ ] Неиспользуемые фронтом API (`/dreams`, `/day-map`, `/favorites`) — удалять или оставить как API-поверхность, решает пользователь.
+- [ ] Тестовые юзеры в прод-БД (gtest_*, dreamfix1, chat_smoke_*) — вопрос об удалении не закрыт.
