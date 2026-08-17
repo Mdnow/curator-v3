@@ -1200,3 +1200,54 @@ iPhone 12 Pro Max: портрет 428px, ландшафт 926px. Портрет 
 - `app.js` нельзя чисто разнести на «своё/чужое»: правки веток чата (`session→thread`) лежат в тех же функциях, где менялся отклик. Поэтому коммит сработал «всё вместе», а не двумя отдельными фронтовыми коммитами.
 - 429-лимиты free-моделей (embed/chat через OpenRouter) дают 500/зависания в тестах — это внешнее ограничение, не дефект кода. UI теперь честно показывает таймаут/ошибку вместо молчаливого ожидания.
 - Черновик живёт в localStorage по ключу с датой — смена даты не теряет текст, но черновики разных дней не смешиваются.
+
+---
+
+## 37. 17.08.2026 — Ветки чата: диалог = тема с названием (ADR-0014)
+
+### 37.1. Задача
+Пользователь: «кнопки "обсудить" разбросаны по приложению, но их диалоги нигде не сохраняются, а архив главного чата — полный бардак без структуры. Хочу кнопки везде, но единый чат куратора и историю, по которой можно гулять и перечитывать». Избранная модель — ChatGPT/Claude: каждый вход («обсудить», «новый диалог») создаёт новую ветку с названием по смыслу.
+
+### 37.2. Решения
+1. **Модель веток**: отсутствие `thread_id` в запросе = новая ветка; наличие = продолжение той же. Проектный диалог (`project_id`, ADR-0013) остаётся отдельным путём — не мигрирует в ветки.
+2. **Архив** — единый хронологический список веток (по последней активности): название + дата + число сообщений + поиск.
+3. **Заголовок ветки** — AI по смыслу из первого сообщения, 2-5 слов, фоновая задача (BackgroundTasks), формат JSON через `call_ai_json` (как `ai_title` у заметок).
+
+### 37.3. БД (`backend/db.py`)
+```sql
+CREATE TABLE IF NOT EXISTS chat_threads (
+  id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT now(), updated_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE chat_history ADD COLUMN IF NOT EXISTS thread_id INTEGER REFERENCES chat_threads(id) ON DELETE CASCADE;
+```
+Миграция в `init_db()`: группы `(user_id, session_id)` → ветки (заголовок — первые 60 символов первого сообщения; `updated_at` = последний `created_at`); сообщения с `session_id IS NULL AND project_id IS NULL` → ветка «старые сообщения»; «сироты» с `thread_id IS NULL AND session_id IS NULL` причисляются к ветке «старые сообщения»/своей ветке при существующем `thread_id`. Всё идемпотентно.
+
+### 37.4. API (`backend/routes/chat.py`)
+- `POST /api/ai/chat`: если `project_id` — старый путь; иначе `thread_id` из запроса; если нет — `INSERT chat_threads` + фоновая `_title_thread`; сообщение пишется в `chat_history` с `thread_id`; после ответа — `UPDATE chat_threads SET updated_at`. Ответ: `{..., "thread_id": N, "session_id": N}` (session_id оставлен для совместимости фронта).
+- `GET /chat/threads` — список веток: `title` (fallback — превью последнего сообщения), `started/ended`, `msg_count`. Новые ветки без заголовка в начале списка.
+- `GET /chat/threads/{id}` — сообщения ветки (проверка владельца, 404).
+- `DELETE /chat/threads/{id}` — каскадом чистит сообщения.
+- `GET /chat/search` — теперь возвращает `thread_id` для открытия ветки.
+- `DELETE /chat/history` — удаляет и ветки пользователя.
+- Старые `/chat/sessions*` удалены.
+
+### 37.5. Заголовок ветки (`backend/ai.py`)
+`THREAD_TITLE_PROMPT` + `generate_thread_title(first_message)` через `call_ai_json` (JSON `{"title": ...}`). Первая версия использовала текстовый вызов и возвращала «рассуждение» модели вместо заголовка — переписана на JSON-формат. Внешний лимит free-моделей (429) не дал проверить финальный вариант вживую; при недоступности AI заголовок остаётся пустым, ветка всё равно работает (fallback-превью в архиве).
+
+### 37.6. Фронт (`app.js`, `index.html`, `chat.css`)
+- `currentThreadId` вместо `currentSessionId`; `newChat()` сбрасывает ветку и ставит «куратор» в шапку.
+- Все «обсудить» автоотправляют в новой ветке: `discussWithCurator`, `discussTheme`, `discussGoal`, `data-pnote-discuss`, `#selAsk`, heads-up.
+- `loadArchiveSessions` → `GET /chat/threads`, `openSessionInChat(threadId)`, `deleteSession(threadId)`.
+- Поиск → `data-result-thread`; `<span class="chat-title" id="chatTitle">`; `.chat-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }`.
+- Кэш-бастеры: `app.js?v=24` (в составе ADR-0015).
+
+### 37.7. Проверка
+- `py_compile` OK, `ruff check` чисто, `node --check` OK, `test_save_intent.py` 16/16.
+- Точечный интеграционный тест веток (ASGITransport, юзер `tt1`): `POST /ai/chat` → 200 + `thread_id=43`; `GET /chat/threads` → count=1, msg_count=2; продолжение с тем же `thread_id` → 4 сообщения в ветке; поиск → 2 результата; `DELETE /chat/threads/{id}` → 200, веток 0. Заголовок в тот момент был мусорный (рассуждение модели) — после перевода на JSON ожидается чистый; не проверен из-за 429.
+- `test_all.py`: секции 0-3 (заметки/инсайты/сны) проходят; дальше не успевает — 429/403 free-моделей (Zen и OpenRouter), таймауты соединений на VPN-периодах.
+- Живой сервер :8765 (процесс пользователя, новый код): `/api/chat/threads` — 401 без токена (существует), `/api/chat/sessions` — 404 (удалён).
+
+### 37.8. Замечания
+- Коммит вышел «всё вместе»: фронт-правки веток лежат в тех же функциях, что и правки отклика (ADR-0015) — разделить чисто нельзя.
+- free-модели в тестовые часы в лимитах (429) — заголовки веток могут не генерироваться до спада нагрузки; это внешний фактор, ветки работают и без заголовка.
