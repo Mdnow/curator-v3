@@ -1313,6 +1313,7 @@ ALTER TABLE chat_history ADD COLUMN IF NOT EXISTS thread_id INTEGER REFERENCES c
 ### 39.4. Проверка
 - `python -m py_compile backend/ai.py` — OK.
 - `ruff check backend/ai.py` — all checks passed.
+- Прод: `/api/health` — 200; главная отдаёт `app.js?v=25`/`chat.css?v=12`; автодеплой Render подхватил push `2f34bdb`. Корневой запрос к Render free может долго открываться (cold-start) — не дефект деплоя.
 
 ### 39.5. Замечания
 - Фильтр завязан на английские first-person-формулировки; если утечки вернутся в другой форме (по-русски, от третьего лица) — список расширять по образцу.
