@@ -75,6 +75,8 @@ def _extract_note_refs(text: str) -> list[int]:
 
 
 # Просьба разложить заметки по проектам (распределение).
+# Проекты в интерфейсе исторически называются «папками» (ADR-0013),
+# поэтому синонимы «папк...» обязательны.
 _ASSIGN_INTENT_WORDS = (
     "разложи",
     "разложите",
@@ -88,14 +90,31 @@ _ASSIGN_INTENT_WORDS = (
     "раскидать",
     "разнеси",
     "разнести",
+    "разбей",
+    "разбейте",
+    "разбить",
+    "сгруппируй",
+    "сгруппируйте",
+    "сгруппировать",
+    "группируй",
+    "сортируй",
+    "сортируйте",
+    "рассортируй",
     "привяжи к проекту",
     "привяжи к проектам",
+    "привяжи к папке",
+    "привяжи к папкам",
     "привяжите к проекту",
     "привяжите к проектам",
     "распределение по проектам",
+    "распределение по папкам",
     "разложи по проектам",
+    "разложи по папкам",
+    "по папкам",
     "сортировать по проектам",
+    "сортировать по папкам",
     "отсортируй по проектам",
+    "отсортируй по папкам",
 )
 
 # «Как бы разложить», «можно ли», «что если» — вопрос, а не приказ.
@@ -422,42 +441,49 @@ async def _chat_reply_tx(
     for r in reversed(all_rows):
         history.append({"role": r["role"], "content": r["content"]})
 
+    # Распределение по проектам (ADR-0017): определяем интент заранее,
+    # чтобы при нём не тянуть полные тексты заметок в контекст (токены,
+    # обрезка ответа free-модели). Для распределения хватает компактного
+    # пула ниже.
+    assign_intent = _has_assign_intent(request_message)
+
     # В контексте куратора — материалы проекта, если диалог внутри проекта.
-    note_rows = await db.fetch(
-        """SELECT id, content_encrypted, note_date, is_favorited, ai_summary,
-                  ai_category
-           FROM notes WHERE user_id=$1
-           AND ($2::int IS NULL OR project_id=$2)
-           ORDER BY created_at DESC LIMIT 30""",
-        user_id,
-        project_id,
-    )
     notes = []
     fav_notes = []
     cat_counts = {}
-    for r in note_rows:
-        try:
-            text = decrypt(r["content_encrypted"])
-            notes.append(f"[id={r['id']}] [{r['note_date']}] {text}")
-            if r["is_favorited"]:
-                fav_notes.append(text)
-            cat = (r["ai_category"] or "").strip()
-            if cat and cat != "без категории":
-                cat_counts[cat] = cat_counts.get(cat, 0) + 1
-        except Exception:
-            pass
-
-    dream_rows = await db.fetch(
-        """SELECT content_encrypted, created_at FROM dreams
-           WHERE user_id=$1 ORDER BY created_at DESC LIMIT 5""",
-        user_id,
-    )
     dreams = []
-    for r in dream_rows:
-        try:
-            dreams.append(decrypt(r["content_encrypted"]))
-        except Exception:
-            pass
+    if not assign_intent:
+        note_rows = await db.fetch(
+            """SELECT id, content_encrypted, note_date, is_favorited, ai_summary,
+                      ai_category
+               FROM notes WHERE user_id=$1
+               AND ($2::int IS NULL OR project_id=$2)
+               ORDER BY created_at DESC LIMIT 30""",
+            user_id,
+            project_id,
+        )
+        for r in note_rows:
+            try:
+                text = decrypt(r["content_encrypted"])
+                notes.append(f"[id={r['id']}] [{r['note_date']}] {text}")
+                if r["is_favorited"]:
+                    fav_notes.append(text)
+                cat = (r["ai_category"] or "").strip()
+                if cat and cat != "без категории":
+                    cat_counts[cat] = cat_counts.get(cat, 0) + 1
+            except Exception:
+                pass
+
+        dream_rows = await db.fetch(
+            """SELECT content_encrypted, created_at FROM dreams
+               WHERE user_id=$1 ORDER BY created_at DESC LIMIT 5""",
+            user_id,
+        )
+        for r in dream_rows:
+            try:
+                dreams.append(decrypt(r["content_encrypted"]))
+            except Exception:
+                pass
 
     pattern_block = ""
     if cat_counts:
@@ -508,13 +534,17 @@ async def _chat_reply_tx(
                     str(t) for t in thread_ids
                 )
 
-    system = (
-        CHAT_SYSTEM
-        + ("\n".join(notes) if notes else "Заметок пока нет.")
-        + pattern_block
-        + fav_context
-        + goal_context
-    )
+    if assign_intent:
+        # Лёгкий контекст: полные тексты не нужны, хватит компактного пула.
+        system = CHAT_SYSTEM + goal_context
+    else:
+        system = (
+            CHAT_SYSTEM
+            + ("\n".join(notes) if notes else "Заметок пока нет.")
+            + pattern_block
+            + fav_context
+            + goal_context
+        )
 
     # Проекты — контейнеры заметок: куратор видит их, чтобы советовать
     # и раскладывать заметки (ADR-0017).
@@ -525,10 +555,14 @@ async def _chat_reply_tx(
     # Распределение по проектам: пакет незакреплённых заметок + инструкция
     # с маркером [ASSIGN:...]. Применяется только при явной просьбе.
     assign_block = ""
-    if _has_assign_intent(request_message):
+    if assign_intent:
         assign_block, assign_pool_ids = await _assign_pool_block(db, user_id)
         if assign_block:
             system += "\n\n" + assign_block
+        print(
+            f"[assign] intent=True pool={len(assign_pool_ids)} pool_block={'yes' if assign_block else 'no'}",
+            flush=True,
+        )
 
     result = await chat_with_context(history, system=system)
 
