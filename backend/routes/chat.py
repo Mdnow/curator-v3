@@ -64,14 +64,33 @@ _ASSIGN_RE = re.compile(r"\[ASSIGN:(\{.*?\})\]", re.DOTALL)
 
 
 def _extract_note_refs(text: str) -> list[int]:
-    """Уникальные id заметок из маркеров [NOTE:id] в ответе куратора."""
+    """Уникальные id заметок из плейсхолдеров ⟦NOTE:id⟧ в ответе куратора."""
     ids = []
-    for m in re.finditer(r"\[NOTE:(\d+)\]", text, re.IGNORECASE):
+    for m in re.finditer(r"⟦NOTE:(\d+)⟧", text):
         try:
             ids.append(int(m.group(1)))
         except ValueError:
             continue
     return list(dict.fromkeys(ids))
+
+
+# Куратор ссылается на заметки маркером [NOTE:id] (правило промпта), но
+# free-модели иногда пишут и «(заметка [id=654])», «заметка id=654»,
+# «(id=654)». Все формы сводим к единому плейсхолдеру ⟦NOTE:id⟧, который
+# фронт превращает в ссылку-название с превью по наведению.
+_NOTE_REF_REPLACERS = (
+    (re.compile(r"\[NOTE:\s*(\d+)\]", re.IGNORECASE), r"⟦NOTE:\1⟧"),
+    (re.compile(r"\[id=\s*(\d+)\]"), r"⟦NOTE:\1⟧"),
+    (re.compile(r"\(id[=\s:]?\s*(\d+)\)"), r"⟦NOTE:\1⟧"),
+    (re.compile(r"(заметк\w*)\s+id[=\s:]?\s*(\d+)", re.IGNORECASE), r"\1 ⟦NOTE:\2⟧"),
+)
+
+
+def _replace_note_refs(text: str) -> str:
+    """Все формы ссылок на заметки -> единый плейсхолдер ⟦NOTE:id⟧."""
+    for pat, repl in _NOTE_REF_REPLACERS:
+        text = pat.sub(repl, text)
+    return text
 
 
 # Просьба разложить заметки по проектам (распределение).
@@ -579,11 +598,12 @@ async def _chat_reply_tx(
             ),
         )
 
-    # Ссылки на заметки: куратор помечает упоминания маркером [NOTE:id].
-    # Маркеры вырезаем из текста, по id подтягиваем данные заметок, чтобы
-    # фронт сделал их кликабельными (пользователь читает полный текст).
+    # Ссылки на заметки: куратор помечает упоминания маркером [NOTE:id]
+    # (или пишет «(заметка [id=N])»). Все формы сводим к плейсхолдеру
+    # ⟦NOTE:id⟧ и по id подтягиваем данные заметок — фронт сделает их
+    # ссылками-названиями с превью по наведению.
+    result = _replace_note_refs(result)
     note_ref_ids = _extract_note_refs(result)
-    result = re.sub(r"\[NOTE:\d+\]", "", result, flags=re.IGNORECASE).strip()
     note_refs = []
     if note_ref_ids:
         rows = await db.fetch(

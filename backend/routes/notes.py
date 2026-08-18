@@ -493,3 +493,60 @@ async def get_thread(thread_id: str, user_id: int = Depends(get_current_user)):
                 }
             )
         return notes
+
+
+@router.get("/{note_id}")
+async def get_note(note_id: int, user_id: int = Depends(get_current_user)):
+    """Одна заметка: мини-версия для превью в чате (заголовок, суть, дата)."""
+    async with get_db() as db:
+        row = await db.fetchrow(
+            """SELECT id, content_encrypted, note_date, tags, is_favorited,
+                      ai_title, ai_summary, ai_category, ai_sentiment,
+                      ai_keyphrases, ai_theses, thread_id, mood, project_id,
+                      created_at, updated_at
+               FROM notes WHERE id=$1 AND user_id=$2""",
+            note_id,
+            user_id,
+        )
+        if not row:
+            raise HTTPException(404, "заметка не найдена")
+        try:
+            content = decrypt(row["content_encrypted"])
+        except Exception:
+            content = ""
+        tags = []
+        if row["tags"]:
+            try:
+                tags = json.loads(row["tags"])
+            except Exception:
+                pass
+        keyphrases = []
+        if row["ai_keyphrases"]:
+            try:
+                keyphrases = json.loads(row["ai_keyphrases"])
+            except Exception:
+                pass
+        theses = []
+        if row["ai_theses"]:
+            try:
+                theses = json.loads(row["ai_theses"])
+            except Exception:
+                pass
+        return {
+            "id": row["id"],
+            "content": content,
+            "note_date": row["note_date"],
+            "tags": tags,
+            "is_favorited": row["is_favorited"],
+            "ai_title": row["ai_title"] or "",
+            "ai_summary": row["ai_summary"] or "",
+            "ai_category": row["ai_category"] or "",
+            "ai_sentiment": float(row["ai_sentiment"]) if row["ai_sentiment"] else 0.0,
+            "ai_keyphrases": keyphrases,
+            "ai_theses": theses,
+            "thread_id": row["thread_id"] or "",
+            "mood": row["mood"] or "",
+            "project_id": row["project_id"],
+            "created_at": str(row["created_at"]) if row["created_at"] else "",
+            "updated_at": str(row["updated_at"]) if row["updated_at"] else "",
+        }

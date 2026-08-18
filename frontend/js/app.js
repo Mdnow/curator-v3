@@ -830,11 +830,13 @@ function discussGoal(goalId, title) {
   messagesEl.innerHTML += `<div class="chat-msg user">${esc(msg)}</div>`;
   messagesEl.innerHTML += `<div class="chat-msg ai" id="chatLoading"><div class="ai-dot"></div> думаю...</div>`;
   messagesEl.scrollTop = messagesEl.scrollHeight;
-  api('POST', '/ai/chat', { message: msg, goal_id: goalId, thread_id: null }, { timeoutMs: CHAT_TIMEOUT_MS }).then(result => {
-    const loadingEl = $('#chatLoading'); if (loadingEl) loadingEl.remove();
-    if (result.thread_id) currentThreadId = result.thread_id;
-    const parsed = parseChatReply(result.reply);
-    messagesEl.innerHTML += chatMsgHtml('ai', parsed.text);
+api('POST', '/ai/chat', { message: msg, goal_id: goalId, thread_id: null }, { timeoutMs: CHAT_TIMEOUT_MS }).then(result => {
+      const loadingEl = $('#chatLoading'); if (loadingEl) loadingEl.remove();
+      if (result.thread_id) currentThreadId = result.thread_id;
+      const parsed = parseChatReply(result.reply);
+      cacheNoteRefs(result.note_refs);
+      messagesEl.innerHTML += chatMsgHtml('ai', parsed.text);
+      preloadInlineNoteIds(parsed.text, messagesEl);
     if (result.saved && result.saved.text) {
       messagesEl.innerHTML += `<div class="chat-auto-saved">куратор сохранил это в заметки</div>`;
     }
@@ -1024,6 +1026,7 @@ function renderProjectChat(messages) {
     return;
   }
   el.innerHTML = messages.map(m => chatMsgHtml(m.role === 'assistant' ? 'ai' : 'user', m.content)).join('');
+  preloadInlineNoteIds(messages.filter(m => m.role === 'assistant').map(m => m.content).join(' '), el);
   el.scrollTop = el.scrollHeight;
 }
 
@@ -1041,7 +1044,9 @@ async function sendProjectChat() {
     const result = await api('POST', '/ai/chat', { message: msg, project_id: currentProjectId }, { timeoutMs: CHAT_TIMEOUT_MS });
     const loadingEl = $('#projectChatLoading'); if (loadingEl) loadingEl.remove();
     const parsed = parseChatReply(result.reply);
+    cacheNoteRefs(result.note_refs);
     messagesEl.innerHTML += chatMsgHtml('ai', parsed.text);
+    preloadInlineNoteIds(parsed.text, messagesEl);
     if (result.saved && result.saved.text) {
       messagesEl.innerHTML += `<div class="chat-auto-saved">куратор сохранил это в материалы проекта</div>`;
     }
@@ -1273,12 +1278,134 @@ function cleanChatText(text) {
   return t.trim();
 }
 
+// Ссылки на заметки в тексте чата (T-002): плейсхолдер ⟦NOTE:id⟧ из ответа
+// превращается в ссылку-название, по наведению — превью с сутью заметки.
+const notePreviewCache = {}; // id -> заметка (id, note_date, ai_title, ai_summary, ai_category, content)
+
+function cacheNoteRefs(refs) {
+  if (!refs || !refs.length) return;
+  refs.forEach(n => { if (n && n.id != null) notePreviewCache[n.id] = n; });
+}
+
+async function loadNotePreview(id) {
+  if (notePreviewCache[id]) return notePreviewCache[id];
+  try {
+    const n = await api('GET', '/notes/' + id);
+    notePreviewCache[id] = n;
+    return n;
+  } catch (e) { return null; }
+}
+
+function noteLabel(id) {
+  const n = notePreviewCache[id];
+  return n ? noteTitle(n) : '';
+}
+
+// Замена плейсхолдеров в уже заэкранированном html ответа на ссылки-названия.
+function noteInlineLinksHtml(html) {
+  let out = String(html);
+  const anchor = (id) => {
+    const label = noteLabel(id) || ('заметка ' + id);
+    return `<a class="chat-note-inline" data-note-id="${id}">${esc(label)}</a>`;
+  };
+  out = out.replace(/⟦NOTE:(\d+)⟧/g, (m, id) => anchor(id));
+  // Старые ответы (до T-002): рукописные «(заметка [id=N])», «заметка id=N», «(id=N)»
+  out = out.replace(/\[NOTE:\s*(\d+)\]/gi, (m, id) => anchor(id));
+  out = out.replace(/\(?\s*заметк[a-zа-яё]*\s+\[id=\s*(\d+)\]\s*\)?/gi, (m, id) => anchor(id));
+  out = out.replace(/\(?заметк[a-zа-яё]*\s+id[=\s:]?\s*(\d+)\s*\)?/gi, (m, id) => anchor(id));
+  out = out.replace(/\(id[=\s:]?\s*(\d+)\)/gi, (m, id) => anchor(id));
+  return out;
+}
+
+// Копирование: убрать служебные маркеры, оставить названия заметок.
+function noteCopyClean(clean) {
+  return String(clean)
+    .replace(/⟦NOTE:(\d+)⟧/g, (m, id) => noteLabel(id))
+    .replace(/\[NOTE:\s*(\d+)\]/gi, (m, id) => noteLabel(id))
+    .replace(/\(?\s*заметк[a-zа-яё]*\s+\[id=\s*(\d+)\]\s*\)?/gi, (m, id) => noteLabel(id))
+    .replace(/\(?заметк[a-zа-яё]*\s+id[=\s:]?\s*(\d+)\s*\)?/gi, (m, id) => noteLabel(id));
+}
+
+// Дозагрузить названия для ссылок, которых нет в кэше (старые ответы).
+function preloadInlineNoteIds(text, rootEl) {
+  const ids = new Set();
+  (String(text).match(/⟦NOTE:(\d+)⟧/g) || []).forEach(m => ids.add(m.match(/(\d+)/)[1]));
+  ids.forEach(id => {
+    if (notePreviewCache[id]) return;
+    loadNotePreview(id).then(n => {
+      if (!n) return;
+      const root = rootEl || document;
+      root.querySelectorAll('.chat-note-inline[data-note-id="' + id + '"]').forEach(a => {
+        a.textContent = noteTitle(n);
+      });
+    });
+  });
+}
+
 function chatMsgHtml(role, text) {
   const clean = role === 'ai' ? cleanChatText(text) : text;
+  let bodyHtml = esc(clean).replace(/\n/g, '<br>');
+  if (role === 'ai') bodyHtml = noteInlineLinksHtml(bodyHtml);
   const copyBtn = role === 'ai'
-    ? `<button class="chat-copy" data-copy="${escAttr(clean)}" title="копировать">&#10697;</button>`
+    ? `<button class="chat-copy" data-copy="${escAttr(noteCopyClean(clean))}" title="копировать">&#10697;</button>`
     : '';
-  return `<div class="chat-msg ${role}">${esc(clean).replace(/\n/g, '<br>')}${copyBtn}</div>`;
+  return `<div class="chat-msg ${role}">${bodyHtml}${copyBtn}</div>`;
+}
+
+// ═══ Превью заметки по наведению (T-002) ═══
+let notePopover = null;
+let notePopoverHideTimer = null;
+
+function ensureNotePopover() {
+  if (notePopover) return notePopover;
+  notePopover = document.createElement('div');
+  notePopover.className = 'note-preview-popover';
+  notePopover.style.display = 'none';
+  document.body.appendChild(notePopover);
+  return notePopover;
+}
+
+function scheduleHideNotePopover() {
+  clearTimeout(notePopoverHideTimer);
+  notePopoverHideTimer = setTimeout(() => { if (notePopover) notePopover.style.display = 'none'; }, 160);
+}
+
+function positionNotePopover(pop, anchor) {
+  const r = anchor.getBoundingClientRect();
+  const pw = Math.min(pop.offsetWidth || 260, window.innerWidth - 16);
+  let left = Math.max(8, Math.min(r.left, window.innerWidth - pw - 8));
+  let top = r.bottom + 6;
+  const ph = pop.offsetHeight || 130;
+  if (top + ph > window.innerHeight - 8) top = Math.max(8, r.top - ph - 6);
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
+}
+
+async function showNotePopover(anchor, id) {
+  const pop = ensureNotePopover();
+  let n = notePreviewCache[id];
+  if (!n) {
+    n = await loadNotePreview(id);
+    if (!n) { pop.style.display = 'none'; return; }
+  }
+  pop.dataset.noteId = id;
+  pop.innerHTML =
+    '<div class="note-popover-title">' + esc(noteTitle(n)) + '</div>' +
+    (n.note_date ? '<div class="note-popover-date">' + esc(fmtDate(n.note_date)) + '</div>' : '') +
+    '<div class="note-popover-summary">' + esc(noteSummary(n)) + '</div>' +
+    '<div class="note-popover-hint">нажми, чтобы прочитать полностью</div>';
+  pop.style.display = 'block';
+  positionNotePopover(pop, anchor);
+}
+
+function openNoteFromRef(id) {
+  const n = notePreviewCache[id];
+  const open = (note) => {
+    if (!note) return;
+    openNoteModal({ id: id, content: note.content || '', date: note.note_date || '', title: noteTitle(note) });
+  };
+  if (n) open(n);
+  else loadNotePreview(id).then(open);
 }
 
 // Сводка распределения заметок по проектам (ADR-0017): блок «куратор разложила».
@@ -1384,7 +1511,9 @@ async function sendChat() {
     const loadingEl = $('#chatLoading'); if (loadingEl) loadingEl.remove();
     if (result.thread_id) currentThreadId = result.thread_id;
     const parsed = parseChatReply(result.reply);
+    cacheNoteRefs(result.note_refs);
     messagesEl.innerHTML += chatMsgHtml('ai', parsed.text);
+    preloadInlineNoteIds(parsed.text, messagesEl);
     if (result.saved && result.saved.text) {
       messagesEl.innerHTML += `<div class="chat-auto-saved">куратор сохранил это в заметки</div>`;
     }
@@ -1504,6 +1633,7 @@ async function openSessionInChat(threadId) {
       const role = m.role === 'assistant' ? 'ai' : 'user';
       return chatMsgHtml(role, m.content);
     }).join('');
+    preloadInlineNoteIds(messages.filter(m => m.role === 'assistant').map(m => m.content).join(' '), messagesEl);
     currentThreadId = threadId;
     const threads = await api('GET', '/chat/threads').catch(() => []);
     const t = threads.find(x => x.thread_id === threadId);
@@ -1952,6 +2082,30 @@ document.addEventListener('DOMContentLoaded', () => {
     const ref = e.target.closest('.chat-note-ref');
     if (ref) openNoteModal({ id: ref.dataset.noteId, content: ref.dataset.noteContent, date: ref.dataset.noteDate, title: ref.dataset.noteTitle });
   });  $('#chatNewBtn').addEventListener('click', newChat);
+  // Ссылки-названия заметок в тексте ответов: превью по наведению, открытие по клику (T-002)
+  document.addEventListener('mouseover', (e) => {
+    const a = e.target.closest('.chat-note-inline');
+    if (a) {
+      clearTimeout(notePopoverHideTimer);
+      showNotePopover(a, a.dataset.noteId);
+    } else if (!e.target.closest('.note-preview-popover')) {
+      scheduleHideNotePopover();
+    }
+  });
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('.chat-note-inline');
+    if (a) {
+      e.preventDefault();
+      if (notePopover) notePopover.style.display = 'none';
+      openNoteFromRef(a.dataset.noteId);
+      return;
+    }
+    const pop = e.target.closest('.note-preview-popover');
+    if (pop && pop.dataset.noteId) {
+      pop.style.display = 'none';
+      openNoteFromRef(pop.dataset.noteId);
+    }
+  });
   const noteModal = $('#noteModal');
   if (noteModal) {
     $$('[data-close-note-modal]').forEach(el => el.addEventListener('click', closeNoteModal));
