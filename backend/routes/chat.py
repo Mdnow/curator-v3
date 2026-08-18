@@ -6,7 +6,12 @@ from backend.db import get_db
 from backend.auth import get_current_user
 from backend.crypto import encrypt, decrypt
 from backend.models import ChatReq
-from backend.ai import chat_with_context, generate_thread_title, CHAT_SYSTEM
+from backend.ai import (
+    AI_LAST_ERROR,
+    chat_with_context,
+    generate_thread_title,
+    CHAT_SYSTEM,
+)
 from datetime import datetime
 
 router = APIRouter(prefix="/api", tags=["chat"])
@@ -55,6 +60,9 @@ def _has_save_intent(message: str) -> bool:
     return any(word in low for word in _SAVE_INTENT_WORDS)
 
 
+_ASSIGN_RE = re.compile(r"\[ASSIGN:(\{.*?\})\]", re.DOTALL)
+
+
 def _extract_note_refs(text: str) -> list[int]:
     """Уникальные id заметок из маркеров [NOTE:id] в ответе куратора."""
     ids = []
@@ -64,6 +72,199 @@ def _extract_note_refs(text: str) -> list[int]:
         except ValueError:
             continue
     return list(dict.fromkeys(ids))
+
+
+# Просьба разложить заметки по проектам (распределение).
+_ASSIGN_INTENT_WORDS = (
+    "разложи",
+    "разложите",
+    "разложить",
+    "раскладывай",
+    "раскладку",
+    "распредели",
+    "распределите",
+    "распределить",
+    "раскидай",
+    "раскидать",
+    "разнеси",
+    "разнести",
+    "привяжи к проекту",
+    "привяжи к проектам",
+    "привяжите к проекту",
+    "привяжите к проектам",
+    "распределение по проектам",
+    "разложи по проектам",
+    "сортировать по проектам",
+    "отсортируй по проектам",
+)
+
+# «Как бы разложить», «можно ли», «что если» — вопрос, а не приказ.
+_ASSIGN_NEGATIVE_MARKERS = (
+    "как бы",
+    "можно ли",
+    "что если",
+    "что, если",
+    "как бы ты",
+    "предложи",
+)
+
+
+def _has_assign_intent(message: str) -> bool:
+    """Пользователь явно попросил разложить заметки по проектам."""
+    low = message.lower()
+    if any(m in low for m in _ASSIGN_NEGATIVE_MARKERS):
+        return False
+    return any(word in low for word in _ASSIGN_INTENT_WORDS)
+
+
+async def _projects_context_block(db, user_id: int) -> str:
+    """Список проектов для контекста куратора: «[id=5] Книга»."""
+    rows = await db.fetch(
+        "SELECT id, name FROM projects WHERE user_id=$1 ORDER BY updated_at DESC",
+        user_id,
+    )
+    if not rows:
+        return ""
+    return "ПРОЕКТЫ (контейнеры заметок):\n" + "\n".join(
+        f"- [id={r['id']}] {r['name']}" for r in rows
+    )
+
+
+async def _assign_pool_block(db, user_id: int) -> tuple[str, list[int]]:
+    """Пакет последних незакреплённых заметок + их id.
+
+    Заметка показывается кратко: заголовок/суммари/категория, если есть,
+    иначе первые символы текста. Полный текст не льём — классификации
+    достаточно, а токенов тратится меньше.
+    """
+    rows = await db.fetch(
+        """SELECT id, note_date, content_encrypted, ai_title, ai_summary, ai_category
+           FROM notes WHERE user_id=$1 AND project_id IS NULL
+           ORDER BY created_at DESC LIMIT 50""",
+        user_id,
+    )
+    if not rows:
+        return "", []
+    lines = []
+    ids = []
+    for r in rows:
+        ids.append(r["id"])
+        preview = ""
+        try:
+            content = decrypt(r["content_encrypted"]) or ""
+        except Exception:
+            content = ""
+        if r["ai_summary"]:
+            preview = r["ai_summary"][:180]
+        elif r["ai_title"]:
+            preview = r["ai_title"]
+        else:
+            preview = content[:180].replace("\n", " ")
+        cat = (r["ai_category"] or "").strip()
+        cat_part = f" | категория: {cat}" if cat and cat != "без категории" else ""
+        lines.append(f"- [id={r['id']}] [{r['note_date']}] «{preview}»{cat_part}")
+    block = (
+        "РАСПРЕДЕЛЕНИЕ ПО ПРОЕКТАМ (по просьбе пользователя):\n"
+        + "\n".join(lines)
+        + "\n\nИнструкция: реши, какие заметки к каким проектам отнести. "
+        "Привязывай ТОЛЬКО при явном совпадении темы. Если темы нет или "
+        "подходящего проекта нет — заметку НЕ трогай, оставь как есть. "
+        "Если несколько заметок образуют устойчивую тему без подходящего "
+        "проекта — назови новый проект (1-3 слова). В конце ответа добавь "
+        'маркер [ASSIGN:{"<id_заметки>": <id_проекта> | "<имя нового проекта>", ...}]: '
+        "число = id существующего проекта из списка выше, строка = имя нового "
+        "проекта. Используй ТОЛЬКО реальные id заметок и проектов. "
+        "Не привязывай всё скопом — только то, в чём уверена."
+    )
+    return block, ids
+
+
+def _parse_assign_plan(text: str) -> dict[int, int | str]:
+    """План из маркера [ASSIGN:{"12": 5, "15": "Здоровье"}].
+
+    Число — id существующего проекта, строка — имя нового. Возвращает
+    пустой dict, если маркеров нет или JSON битый.
+    """
+    plan: dict[int, int | str] = {}
+    for m in _ASSIGN_RE.finditer(text):
+        raw = m.group(1).strip()
+        try:
+            data = json.loads(raw)
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        for k, v in data.items():
+            try:
+                note_id = int(k)
+            except (TypeError, ValueError):
+                continue
+            if isinstance(v, int) and v > 0:
+                plan[note_id] = v
+            elif isinstance(v, str) and v.strip():
+                plan[note_id] = v.strip()
+    return plan
+
+
+async def _apply_assign_plan(db, user_id: int, plan: dict[int, int | str]) -> dict:
+    """Применить план: привязки к существующим/новым проектам. Сводка для UI."""
+    summary: dict = {"assigned": [], "created_projects": []}
+    for note_id, target in plan.items():
+        note = await db.fetchrow(
+            "SELECT id, project_id FROM notes WHERE id=$1 AND user_id=$2",
+            note_id,
+            user_id,
+        )
+        if not note:
+            continue
+        pid = None
+        proj_name = ""
+        new_project = False
+        if isinstance(target, int):
+            proj = await db.fetchrow(
+                "SELECT id, name FROM projects WHERE id=$1 AND user_id=$2",
+                target,
+                user_id,
+            )
+            if proj:
+                pid = proj["id"]
+                proj_name = proj["name"]
+        elif isinstance(target, str):
+            proj_name = target
+            proj = await db.fetchrow(
+                "SELECT id FROM projects WHERE user_id=$1 AND LOWER(name)=LOWER($2)",
+                user_id,
+                proj_name,
+            )
+            if proj:
+                pid = proj["id"]
+            else:
+                new = await db.fetchrow(
+                    "INSERT INTO projects (user_id, name) VALUES ($1,$2) RETURNING id",
+                    user_id,
+                    proj_name,
+                )
+                pid = new["id"]
+                new_project = True
+        if pid is None:
+            continue
+        if note["project_id"] == pid:
+            continue
+        await db.execute(
+            "UPDATE notes SET project_id=$1, updated_at=CURRENT_TIMESTAMP WHERE id=$2 AND user_id=$3",
+            pid,
+            note_id,
+            user_id,
+        )
+        await db.execute(
+            "UPDATE projects SET updated_at=CURRENT_TIMESTAMP WHERE id=$1", pid
+        )
+        if new_project and proj_name not in summary["created_projects"]:
+            summary["created_projects"].append(proj_name)
+        summary["assigned"].append(
+            {"note_id": note_id, "project": proj_name, "new_project": new_project}
+        )
+    return summary
 
 
 async def _save_note(
@@ -138,14 +339,74 @@ async def _chat_reply(
 ) -> dict:
     """Общий путь ответа куратора (текст и файлы, ADR-0016).
 
-    user-сообщение уже вставлено в историю вызывающей стороной; здесь:
-    контекст (заметки/сны/цели) → AI → [NOTE] / [SAVE] → ответ в историю.
+    Вставка user-сообщения и ответ — в одной транзакции: при сбое AI
+    откатывается всё, чтобы в истории не копились осиротевшие сообщения
+    и фейковые ответы. Возвращает dict или бросает HTTPException(503).
     """
+    async with db.transaction():
+        return await _chat_reply_tx(
+            db, user_id, thread_id, project_id, request_message, background, goal_id
+        )
+
+
+async def _chat_reply_tx(
+    db,
+    user_id: int,
+    thread_id: int | None,
+    project_id: int | None,
+    request_message: str,
+    background: BackgroundTasks,
+    goal_id: int | None = None,
+) -> dict:
+    """Тело ответа куратора (вызывается внутри транзакции _chat_reply)."""
+    if project_id is not None:
+        owner = await db.fetchrow(
+            "SELECT id FROM projects WHERE id=$1 AND user_id=$2",
+            project_id,
+            user_id,
+        )
+        if not owner:
+            raise HTTPException(404, "проект не найден")
+    elif thread_id is not None:
+        owner = await db.fetchrow(
+            "SELECT id FROM chat_threads WHERE id=$1 AND user_id=$2 LIMIT 1",
+            thread_id,
+            user_id,
+        )
+        if not owner:
+            raise HTTPException(404, "ветка не найдена")
+    else:
+        row = await db.fetchrow(
+            "INSERT INTO chat_threads (user_id) VALUES ($1) RETURNING id",
+            user_id,
+        )
+        thread_id = row["id"]
+
+    if project_id is not None:
+        await db.execute(
+            """INSERT INTO chat_history (user_id, role, content, project_id)
+               VALUES ($1,$2,$3,$4)""",
+            user_id,
+            "user",
+            request_message,
+            project_id,
+        )
+    else:
+        await db.execute(
+            """INSERT INTO chat_history (user_id, role, content, thread_id)
+               VALUES ($1,$2,$3,$4)""",
+            user_id,
+            "user",
+            request_message,
+            thread_id,
+        )
+        background.add_task(_title_thread, thread_id, user_id, request_message)
+
     if project_id is not None:
         all_rows = await db.fetch(
             """SELECT role, content FROM chat_history
                WHERE user_id=$1 AND project_id=$2
-               ORDER BY created_at DESC LIMIT 40""",
+               ORDER BY created_at DESC, id DESC LIMIT 40""",
             user_id,
             project_id,
         )
@@ -153,7 +414,7 @@ async def _chat_reply(
         all_rows = await db.fetch(
             """SELECT role, content FROM chat_history
                WHERE user_id=$1 AND thread_id=$2
-               ORDER BY created_at DESC LIMIT 40""",
+               ORDER BY created_at DESC, id DESC LIMIT 40""",
             user_id,
             thread_id,
         )
@@ -255,7 +516,34 @@ async def _chat_reply(
         + goal_context
     )
 
+    # Проекты — контейнеры заметок: куратор видит их, чтобы советовать
+    # и раскладывать заметки (ADR-0017).
+    projects_block = await _projects_context_block(db, user_id)
+    if projects_block:
+        system += "\n\n" + projects_block
+
+    # Распределение по проектам: пакет незакреплённых заметок + инструкция
+    # с маркером [ASSIGN:...]. Применяется только при явной просьбе.
+    assign_block = ""
+    if _has_assign_intent(request_message):
+        assign_block, assign_pool_ids = await _assign_pool_block(db, user_id)
+        if assign_block:
+            system += "\n\n" + assign_block
+
     result = await chat_with_context(history, system=system)
+
+    # AI недоступен: не пишем в историю ни user, ни assistant — транзакция
+    # откатывается, клиент видит ошибку и может повторить без дубля.
+    if not result:
+        raise HTTPException(
+            503,
+            "AI временно недоступен"
+            + (
+                ": бесплатный лимит AI исчерпан на сегодня (сброс в 00:00 UTC)"
+                if AI_LAST_ERROR and "rate limit" in AI_LAST_ERROR.lower()
+                else ". Попробуй через минуту"
+            ),
+        )
 
     # Ссылки на заметки: куратор помечает упоминания маркером [NOTE:id].
     # Маркеры вырезаем из текста, по id подтягиваем данные заметок, чтобы
@@ -301,6 +589,16 @@ async def _chat_reply(
         if thought_text and _has_save_intent(request_message):
             saved = await _save_note(db, user_id, thought_text, background, project_id)
 
+    # Распределение по проектам: маркер [ASSIGN:...] уважается только при
+    # явной просьбе (защита от самовольного раскладывания, как у [SAVE:]).
+    # Маркер вырезается в любом случае, чтобы не попасть в историю.
+    assigned = None
+    assign_plan = _parse_assign_plan(result)
+    if assign_plan:
+        result = _ASSIGN_RE.sub("", result).strip()
+        if _has_assign_intent(request_message):
+            assigned = await _apply_assign_plan(db, user_id, assign_plan)
+
     if project_id is not None:
         await db.execute(
             """INSERT INTO chat_history (user_id, role, content, project_id)
@@ -332,6 +630,7 @@ async def _chat_reply(
         "reply": result,
         "auto_saved": [],
         "saved": saved,
+        "assigned": assigned,
         "note_refs": note_refs,
         "thread_id": thread_id,
         "session_id": thread_id,
@@ -344,59 +643,16 @@ async def ai_chat(
     req: ChatReq, background: BackgroundTasks, user_id: int = Depends(get_current_user)
 ):
     async with get_db() as db:
-        # Диалог проекта остаётся в своём режиме (ADR-0014): постоянный фильтр по project_id.
-        # Обычный чат — ветки (thread): новая при первом сообщении, продолжение по thread_id.
-        project_id = None
-        thread_id = None
-        if req.project_id is not None:
-            owner = await db.fetchrow(
-                "SELECT id FROM projects WHERE id=$1 AND user_id=$2",
-                req.project_id,
-                user_id,
-            )
-            if not owner:
-                raise HTTPException(404, "проект не найден")
-            project_id = req.project_id
-        elif req.thread_id is not None:
-            owner = await db.fetchrow(
-                "SELECT id FROM chat_threads WHERE id=$1 AND user_id=$2 LIMIT 1",
-                req.thread_id,
-                user_id,
-            )
-            if not owner:
-                raise HTTPException(404, "ветка не найдена")
-            thread_id = req.thread_id
-        else:
-            # Новая ветка: модель как в ChatGPT/Claude — каждое новое обращение
-            # из «обсудить»/«новый диалог» создаёт отдельный разговор.
-            row = await db.fetchrow(
-                "INSERT INTO chat_threads (user_id) VALUES ($1) RETURNING id",
-                user_id,
-            )
-            thread_id = row["id"]
-
-        if project_id is not None:
-            await db.execute(
-                """INSERT INTO chat_history (user_id, role, content, project_id)
-                   VALUES ($1,$2,$3,$4)""",
-                user_id,
-                "user",
-                req.message,
-                project_id,
-            )
-        else:
-            await db.execute(
-                """INSERT INTO chat_history (user_id, role, content, thread_id)
-                   VALUES ($1,$2,$3,$4)""",
-                user_id,
-                "user",
-                req.message,
-                thread_id,
-            )
-            background.add_task(_title_thread, thread_id, user_id, req.message)
-
+        # Вся логика (владелец ветки/проекта, вставка user, AI, вставка assistant,
+        # транзакция на сбой) — в _chat_reply (ADR-0014, ADR-0016).
         return await _chat_reply(
-            db, user_id, thread_id, project_id, req.message, background, req.goal_id
+            db,
+            user_id,
+            req.thread_id,
+            req.project_id,
+            req.message,
+            background,
+            req.goal_id,
         )
 
 
@@ -422,11 +678,14 @@ async def chat_upload(
     from backend.ai import describe_image
     import base64
 
-    data = await file.read()
+    data = await file.read(MAX_FILE_SIZE + 1)
     if not data:
         raise HTTPException(400, "пустой файл")
     if len(data) > MAX_FILE_SIZE:
         raise HTTPException(413, "файл больше 5 МБ")
+
+    if message and len(message) > 10000:
+        raise HTTPException(422, "сообщение слишком длинное (макс. 10000)")
 
     kind = detect_kind(file.filename or "")
     if kind == "unsupported":
@@ -451,36 +710,12 @@ async def chat_upload(
         except Exception as e:
             raise HTTPException(422, str(e))
 
+    user_text = f"файл: {file.filename}\n\n{content}"
+    if message and message.strip():
+        user_text += f"\n\n{message.strip()}"
+
     async with get_db() as db:
-        if thread_id is not None:
-            owner = await db.fetchrow(
-                "SELECT id FROM chat_threads WHERE id=$1 AND user_id=$2 LIMIT 1",
-                thread_id,
-                user_id,
-            )
-            if not owner:
-                raise HTTPException(404, "ветка не найдена")
-        else:
-            row = await db.fetchrow(
-                "INSERT INTO chat_threads (user_id) VALUES ($1) RETURNING id",
-                user_id,
-            )
-            thread_id = row["id"]
-
-        user_text = f"файл: {file.filename}\n\n{content}"
-        if message and message.strip():
-            user_text += f"\n\n{message.strip()}"
-        await db.execute(
-            """INSERT INTO chat_history (user_id, role, content, thread_id)
-               VALUES ($1,$2,$3,$4)""",
-            user_id,
-            "user",
-            user_text,
-            thread_id,
-        )
-        background.add_task(_title_thread, thread_id, user_id, user_text)
-
-        return await _chat_reply(db, user_id, thread_id, None, message, background)
+        return await _chat_reply(db, user_id, thread_id, None, user_text, background)
 
 
 @router.post("/ai/save-thought")
@@ -503,7 +738,7 @@ async def chat_history(
         rows = await db.fetch(
             """SELECT role, content, created_at
                FROM chat_history WHERE user_id=$1
-               ORDER BY created_at DESC LIMIT $2 OFFSET $3""",
+               ORDER BY created_at DESC, id DESC LIMIT $2 OFFSET $3""",
             user_id,
             limit,
             offset,
@@ -517,7 +752,11 @@ async def chat_history(
 @router.delete("/chat/history")
 async def clear_chat(user_id: int = Depends(get_current_user)):
     async with get_db() as db:
-        await db.execute("DELETE FROM chat_history WHERE user_id=$1", user_id)
+        # Удаляем только ветки чата; проектные диалоги (project_id) не трогаем.
+        await db.execute(
+            "DELETE FROM chat_history WHERE user_id=$1 AND project_id IS NULL",
+            user_id,
+        )
         await db.execute("DELETE FROM chat_threads WHERE user_id=$1", user_id)
         return {"ok": True}
 
@@ -589,7 +828,7 @@ async def chat_thread_messages(
             """SELECT role, content, created_at
                FROM chat_history
                WHERE user_id=$1 AND thread_id=$2
-               ORDER BY created_at ASC""",
+               ORDER BY created_at ASC, id ASC""",
             user_id,
             thread_id,
         )
@@ -609,8 +848,8 @@ async def chat_search(q: str = "", user_id: int = Depends(get_current_user)):
         rows = await db.fetch(
             """SELECT role, content, created_at, thread_id
                FROM chat_history
-               WHERE user_id=$1 AND content LIKE $2 ESCAPE '\\'
-               ORDER BY created_at DESC LIMIT 50""",
+               WHERE user_id=$1 AND content ILIKE $2 ESCAPE '\\'
+               ORDER BY created_at DESC, id DESC LIMIT 50""",
             user_id,
             pattern,
         )

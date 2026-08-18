@@ -52,11 +52,17 @@ def extract_text(filename: str, data: bytes) -> str:
 
 
 def _decode_text(data: bytes) -> str:
-    for enc in ("utf-8", "cp1251", "latin-1"):
+    for enc in ("utf-8-sig", "utf-8", "cp1251"):
         try:
-            return data.decode(enc)
+            text = data.decode(enc)
         except (UnicodeDecodeError, LookupError):
             continue
+        # Бинарные данные cp1251 «декодирует» в любой мусор: если больше ~3%
+        # управляющих символов — кодировка не подошла, пробуем следующую.
+        controls = sum(1 for ch in text if ord(ch) < 32 and ch not in "\t\r\n")
+        if text and controls / len(text) > 0.03:
+            continue
+        return text
     return data.decode("utf-8", "replace")
 
 

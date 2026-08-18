@@ -216,17 +216,79 @@ DAY_ESSENCE_PROMPT = """Ты — когнитивное зеркало. Посм
 AI_LAST_ERROR = ""
 
 
+_REASONING_STARTS = (
+    "here's a thinking process",
+    "here is a thinking process",
+    "i'll think",
+    "let me think",
+    "let me identify",
+    "let me check",
+    "let me look",
+    "let me search",
+    "let me find",
+    "let me review",
+    "let me analyze",
+    "let me first",
+    "let me start",
+    "let me see",
+    "let me go",
+    "let me help",
+    "let me make",
+    "let's identify",
+    "let's find",
+    "let's check",
+    "let's look",
+    "let's review",
+    "let's start",
+    "i need to",
+    "i should",
+    "i will",
+    "i'd like to",
+    "i'm going to",
+    "i am going to",
+    "i'm thinking",
+    "i am thinking",
+    "okay, let me",
+    "ok, let me",
+    "first, i",
+    "first, let me",
+    "to answer this",
+    "to answer the",
+    "to address this",
+    "the user wants me",
+    "the user asked me",
+    "the user is asking",
+    "the user has asked",
+    "user wants me",
+    "user asked me",
+    "from my analysis",
+    "based on my",
+    "based on the",
+    "looking at the",
+    "looking through the",
+    "after analyzing",
+    "upon analyzing",
+    "analyzing the",
+    "reviewing the",
+    "my task is",
+    "my goal is",
+    "we need to",
+    "first step",
+)
+
+
 def _is_reasoning_noise(content: str) -> bool:
-    """Ответ-размышление модели («Here's a thinking process…»), а не ответ пользователю."""
+    """Ответ-размышление модели, а не ответ пользователю.
+
+    Free-модели (deepseek-v4-flash-free и др.) возвращают свой chain-of-thought
+    прямо в поле content, часто по-английски, в первом лице: «The user wants me…»,
+    «Let me identify…», «Based on my analysis…». Русскоязычный ответ Куратора
+    так начинаться не может — отсекаем и пробуем следующую модель.
+    """
     if not content:
         return False
-    head = content.strip()[:80].lower()
-    return (
-        head.startswith("here's a thinking process")
-        or head.startswith("i'll think")
-        or head.startswith("let me think")
-        or head.startswith("i need to")
-    )
+    head = content.strip()[:120].lower()
+    return head.startswith(_REASONING_STARTS)
 
 
 def _parse_json_content(content: str | None) -> dict | None:
@@ -285,8 +347,13 @@ async def _request_model(
             print(f"[ai] {model} -> {r.status_code}: {err}", flush=True)
             return None
         r.raise_for_status()
-        content = r.json()["choices"][0]["message"]["content"]
+        msg = r.json()["choices"][0]["message"]
+        content = (msg.get("content") or "").strip()
         if not content:
+            return None
+        reasoning = (msg.get("reasoning") or "").strip()
+        if reasoning and content.startswith(reasoning[:120]):
+            print(f"[ai] {model} -> reasoning-in-content", flush=True)
             return None
         if _is_reasoning_noise(content):
             print(f"[ai] {model} -> reasoning-noise", flush=True)
@@ -662,14 +729,15 @@ CHAT_SYSTEM = """Ты — Куратор, AI-ассистент внутри п�
 5.1. Когда ссылаешься на конкретную заметку пользователя или цитируешь её мысль — сразу после упоминания/цитаты добавь маркер [NOTE:ID], где ID — число из строки «[id=ID]» в списке заметок ниже. Используй ТОЛЬКО реальные ID из этого списка, не выдумывай. Можно несколько маркеров за один ответ. Маркер невидим для пользователя — система вырежет его и превратит заметку в кликабельную ссылку.
 6. Задавай вопросы когда уместно — помогай углублять мысль.
 7. Отвечай ПРОСТЫМ ТЕКСТОМ без разметки: без звёздочек (**жирный**, *курсив*), без решёток (#), без таблиц (|), без бэктиков (`), без markdown-ссылок [текст](url). Никаких «закорючек» — только обычный текст с переносами строк. Списки можно, но простым дефисом без отступов-буллетов.
+7.1. Проекты — контейнеры, в которых копятся связанные заметки. Если пользователь просит разложить заметки по проектам («разложи», «распредели», «раскидай», «по проектам») — система даст тебе блок РАСПРЕДЕЛЕНИЕ ПО ПРОЕКТАМ: список проектов и незакреплённых заметок. Отнеси к проекту только явно подходящие по теме, сомнительные не трогай. Устойчивая тема без проекта — предложи новый проект именем. Верни маркер [ASSIGN:{"<id заметки>": <id проекта> или "<имя нового проекта>", ...}] в конце ответа — система применит его, а ты кратко опиши результат словами.
 
 Последние заметки пользователя для контекста:
 """
 
 
-async def chat_with_context(messages: list[dict], system: str = "") -> str:
+async def chat_with_context(messages: list[dict], system: str = "") -> str | None:
     if not PROVIDERS:
-        return "API ключ не настроен."
+        return None
 
     msgs = []
     if system:
@@ -691,9 +759,7 @@ async def chat_with_context(messages: list[dict], system: str = "") -> str:
                     if content:
                         return content
 
-    if AI_LAST_ERROR and "rate limit" in AI_LAST_ERROR.lower():
-        return "Бесплатный лимит AI на сегодня исчерпан (сброс в 00:00 UTC)."
-    return "AI временно недоступен. Попробуй через минуту."
+    return None
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:

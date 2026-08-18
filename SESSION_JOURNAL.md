@@ -914,3 +914,26 @@
 - [ ] Проверить изображение вживую при спаде лимитов OpenRouter free (403 на vision).
 - [ ] Прод-проверка после деплоя: загрузка txt/pdf из чата, чип файла, история.
 - [ ] Продублировать `CURATOR_ENCRYPTION_KEY` в менеджер паролей (страховка, из сессии 14).
+
+---
+
+## Сессия: 2026-08-18 (сессия 18) — утечка reasoning-модели в ответы чата (фикс фильтра)
+
+**Тема:** Куратор отвечал длинным англоязычным текстом вида «The user wants me to write in Russian. Let me identify which notes from today…» — это chain-of-thought free-модели, утекший в поле `content`, а не ответ.
+
+**Причина (диагностика):**
+- Первая модель в `ZEN_MODELS` — `deepseek-v4-flash-free` — возвращает свой внутренний реазинг **прямо в `content`**, а не в отдельное поле `reasoning`.
+- `_request_model` брал `content` как есть и не сверял с полем `reasoning`.
+- Фильтр `_is_reasoning_noise` ловил только 4 захардкоженных паттерна (`here's a thinking process`, `i'll think`, `let me think`, `i need to`) — реальная утечка («The user wants me…», «Let me identify…») не подпадала ни под один.
+
+**Сделано (`backend/ai.py`, коммит):**
+- `_is_reasoning_noise` переписан на кортеж `_REASONING_STARTS` (~50 типичных начал утечки: «the user wants me», «let me identify», «based on my», «i should», «first, let me» и т.п.), проверка по первым 120 символам.
+- `_request_model`: читается отдельное поле `message.reasoning`; если `content` начинается с него — ответ отбрасывается (`reasoning-in-content`). Отброшенный ответ отбрасывается, ротация пробует следующую модель (логика уже была).
+
+**Проверено:**
+- `python -m py_compile backend/ai.py` — OK.
+- `ruff check backend/ai.py` — all checks passed.
+
+**Открыто:**
+- [ ] Прод-проверка: Куратор не отвечает reasoning-простынёй на «какие заметки подходят к проекту X».
+- [ ] Если утечки повторятся — усилить фильтр (например, отбрасывать англоязычные first-person ответы при русском системном промпте).

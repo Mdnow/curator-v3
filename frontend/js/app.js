@@ -823,6 +823,7 @@ async function goalToProject(goalId, title) {
 
 function discussGoal(goalId, title) {
   if (!newChat()) return;
+  if ($('#chatLoading')) return;
   openChatPanel();
   const msg = `поговорим о моём направлении «${title}» — помоги увидеть его глубже`;
   const messagesEl = $('#chatMessages');
@@ -837,6 +838,7 @@ function discussGoal(goalId, title) {
     if (result.saved && result.saved.text) {
       messagesEl.innerHTML += `<div class="chat-auto-saved">куратор сохранил это в заметки</div>`;
     }
+    appendAssignSummary(messagesEl, result);
     if (result.note_refs && result.note_refs.length) {
       const refs = result.note_refs.map(n =>
         `<button class="chat-note-ref" data-note-id="${n.id}" data-note-content="${escAttr(n.content)}" data-note-date="${escAttr(n.note_date)}" data-note-title="${escAttr(noteTitle(n))}">` +
@@ -1043,6 +1045,7 @@ async function sendProjectChat() {
     if (result.saved && result.saved.text) {
       messagesEl.innerHTML += `<div class="chat-auto-saved">куратор сохранил это в материалы проекта</div>`;
     }
+    appendAssignSummary(messagesEl, result);
     if (result.note_refs && result.note_refs.length) {
       const refs = result.note_refs.map(n =>
         `<button class="chat-note-ref" data-note-id="${n.id}" data-note-content="${escAttr(n.content)}" data-note-date="${escAttr(n.note_date)}" data-note-title="${escAttr(noteTitle(n))}">` +
@@ -1229,6 +1232,7 @@ function newChat() {
   const hasUserMsgs = !!document.querySelector('#chatMessages .chat-msg.user');
   if (hasUserMsgs && !confirm('начать новый диалог? этот сохранится в архиве')) return false;
   currentThreadId = null;
+  clearPendingChatFile();
   $('#chatTitle').textContent = 'куратор';
   $('#chatMessages').innerHTML = '<div class="chat-msg ai">привет. я куратор — помогу структурировать мысли, найти связи, предложить инсайты. о чём думаешь?</div>';
   $('#archivePanel').style.display = 'none';
@@ -1277,6 +1281,22 @@ function chatMsgHtml(role, text) {
   return `<div class="chat-msg ${role}">${esc(clean).replace(/\n/g, '<br>')}${copyBtn}</div>`;
 }
 
+// Сводка распределения заметок по проектам (ADR-0017): блок «куратор разложила».
+function appendAssignSummary(messagesEl, result) {
+  if (!result.assigned || !result.assigned.assigned || !result.assigned.assigned.length) return;
+  const { assigned, created_projects } = result.assigned;
+  const byProject = {};
+  assigned.forEach(a => { (byProject[a.project] = byProject[a.project] || []).push(a.note_id); });
+  const lines = Object.entries(byProject).map(([proj, ids]) => `${ids.length} → «${proj}»`).join(', ');
+  let html = `<div class="chat-assigned">куратор разложила по проектам: ${esc(lines)}`;
+  if (created_projects && created_projects.length) {
+    html += ` · созданы проекты: ${esc(created_projects.join(', '))}`;
+  }
+  html += '</div>';
+  messagesEl.innerHTML += html;
+  loadProjects().catch(() => {});
+}
+
 async function copyChatText(text) {
   try {
     await navigator.clipboard.writeText(text);
@@ -1321,9 +1341,10 @@ async function sendChat() {
   if (!msg && !pendingChatFile) return;
   if ($('#chatLoading')) return;
   const messagesEl = $('#chatMessages');
-  if (pendingChatFile) {
-    messagesEl.innerHTML += `<div class="chat-msg user">${esc('файл: ' + pendingChatFileName)}${msg ? '<br>' + esc(msg) : ''}</div>`;
-    clearPendingChatFile();
+  const file = pendingChatFile;
+  const fileName = pendingChatFileName;
+  if (file) {
+    messagesEl.innerHTML += `<div class="chat-msg user">${esc('файл: ' + fileName)}${msg ? '<br>' + esc(msg) : ''}</div>`;
   } else {
     messagesEl.innerHTML += `<div class="chat-msg user">${esc(msg)}</div>`;
     input.value = '';
@@ -1332,9 +1353,9 @@ async function sendChat() {
   messagesEl.scrollTop = messagesEl.scrollHeight;
   try {
     let result;
-    if (pendingChatFile) {
+    if (file) {
       const fd = new FormData();
-      fd.append('file', pendingChatFile, pendingChatFileName);
+      fd.append('file', file, fileName);
       if (msg) fd.append('message', msg);
       if (currentThreadId) fd.append('thread_id', currentThreadId);
       const controller = new AbortController();
@@ -1367,6 +1388,7 @@ async function sendChat() {
     if (result.saved && result.saved.text) {
       messagesEl.innerHTML += `<div class="chat-auto-saved">куратор сохранил это в заметки</div>`;
     }
+    appendAssignSummary(messagesEl, result);
     if (result.note_refs && result.note_refs.length) {
       const refs = result.note_refs.map(n =>
         `<button class="chat-note-ref" data-note-id="${n.id}" data-note-content="${escAttr(n.content)}" data-note-date="${escAttr(n.note_date)}" data-note-title="${escAttr(noteTitle(n))}">` +
@@ -1512,7 +1534,8 @@ async function searchArchive() {
     results.innerHTML = data.map(r => {
       const hl = r.snippet.replace(new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi'), '<mark>$1</mark>');
       const roleLabel = r.role === 'user' ? 'ты' : 'куратор';
-      return `<div class="archive-result" data-result-thread="${r.thread_id || 0}"><div class="archive-result-snippet">${roleLabel}: ${hl}</div><div class="archive-result-meta">${r.time ? formatArchiveDate(r.time) : ''}</div></div>`;
+      const threadAttr = r.thread_id ? ` data-result-thread="${r.thread_id}"` : ' data-result-project="1"';
+      return `<div class="archive-result"${threadAttr}><div class="archive-result-snippet">${roleLabel}: ${hl}</div><div class="archive-result-meta">${r.time ? formatArchiveDate(r.time) : ''}</div></div>`;
     }).join('');
   } catch (e) { results.innerHTML = '<div class="archive-empty">ошибка поиска</div>'; }
 }

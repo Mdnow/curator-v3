@@ -1291,3 +1291,29 @@ ALTER TABLE chat_history ADD COLUMN IF NOT EXISTS thread_id INTEGER REFERENCES c
 - pypdf генерирует PDF не так, как читает (API изменился в 6.x: `ContentStream(stream, page)` требует объект потока) — для проверки PDF-извлечения PDF сгенерирован вручную (сырые объекты PDF 1.4).
 - `pip install fpdf2` локально висел из-за сети — для теста не понадобился.
 - Vision завязан на лимиты free-моделей OpenRouter: при недоступности изображение отклоняется 422, текст/PDF работают всегда.
+
+---
+
+## 39. 18.08.2026 — Утечка reasoning-модели в ответы чата: фильтр `_is_reasoning_noise` усилен
+
+### 39.1. Симптом
+Куратор отвечал длинным англоязычным текстом: «The user wants me to write in Russian. Let me identify which notes from today (2026-08-18) are relevant to the media platform project, and then save them…». Это был chain-of-thought модели, утекший в поле `content`, а не ответ пользователю.
+
+### 39.2. Корень
+- Первая модель в `ZEN_MODELS` — `deepseek-v4-flash-free` — отдаёт свой внутренний реазинг **прямо в `content`** (не в отдельное поле `reasoning`).
+- `_request_model` (ai.py) брал `content` как есть, поле `reasoning` не читал и не сверял.
+- Фильтр `_is_reasoning_noise` ловил только 4 паттерна: `here's a thinking process`, `i'll think`, `let me think`, `i need to`. Реальные утечки («The user wants me…», «Let me identify…», «Based on my analysis…») не подпадали ни под один → принимались как ответ.
+- Системный промпт требует ответ по-русски, а reasoning у модели идёт по-английски и в первом лице — это устойчивый признак утечки.
+
+### 39.3. Решение
+- **`_REASONING_STARTS`** — кортеж ~50 типичных начал утечки («the user wants me», «let me identify/check/look/search/find/review/analyze», «based on my», «i should/will», «first, let me», «to answer this», «from my analysis», «we need to» и т.п.). `_is_reasoning_noise` проверяет первые 120 символов.
+- **`_request_model`**: отдельное поле `message.reasoning` читается; если `content` начинается с него — ответ отбрасывается (лог `reasoning-in-content`).
+- Отброшенный ответ = None → ротация пробует следующую модель (механизм был в `call_ai_json`/`call_ai`/`chat_with_context`).
+
+### 39.4. Проверка
+- `python -m py_compile backend/ai.py` — OK.
+- `ruff check backend/ai.py` — all checks passed.
+
+### 39.5. Замечания
+- Фильтр завязан на английские first-person-формулировки; если утечки вернутся в другой форме (по-русски, от третьего лица) — список расширять по образцу.
+- Резервная защита: сравнение `content` с полем `reasoning` работает для API, которые отдают его отдельно (Zen/OpenRouter). Для моделей, льющих reasoning прямо в content без поля, работает только префикс-фильтр.
