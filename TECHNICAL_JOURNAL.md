@@ -1367,3 +1367,28 @@ ALTER TABLE chat_history ADD COLUMN IF NOT EXISTS thread_id INTEGER REFERENCES c
 ### 41.5. Замечания
 - Диагностика без прод-логов: Render API `/services/{id}/logs` = 404 (runtime-логи через API недоступны). Диагноз ставили end-to-end тестом на временном юзере + чтением данных Neon (SELECT, данные mdnow не меняли).
 - Если снова «не распределяет» — в Render-логах искать строку `[assign]`: `intent=True`/`False` покажет, сработал ли детект; пустой маркер — проблема модели, а не логики.
+
+## 42. 18.08.2026 — Настоящая причина «не распределяет»: утечка reasoning-простыни, фильтр не поймал
+
+### 42.1. Симптом
+Марина повторила запрос «распредели заметки по папкам» — куратор ответил **англоязычной простынёй-размышлением модели**:
+«The user wants to distribute their notes into folders (projects). I need to follow Rule 7.1… Let's scan the notes… Let's categorize notes by theme: …», оборвано на полуслове (`[id=5] or [id…`). Ни маркера `[ASSIGN:]`, ни ответа. Простыня попала в чат как ответ ассистента.
+
+### 42.2. Причина
+Фильтр `_is_reasoning_noise` (§39) проверяет `startswith` первых 120 символов по `_REASONING_STARTS`. В списке было «the user wants **me**», но модель начала «The user wants **to**» — без «me» → паттерн не сматчился, шум прошёл. Остальные паттерны простыни («I need to follow», «Let's scan», «Let's categorize», «First, I need to look») были в начале не первыми.
+
+### 42.3. Исправление (коммит TBD)
+Расширен `_REASONING_STARTS` в `backend/ai.py` (~+25 паттернов):
+- «the user wants», «the user wants to» (без me), «okay/ok, so the user», «so the user», «this user wants», «the user is requesting/requests», «the user's»;
+- «i need to follow», «i have to», «my task here is», «my job is», «i'm reading/looking at/reviewing», «i've been»;
+- «let's scan/categorize/group/assign/sort/begin/proceed/go», «first i need», «going through the», «stepping through».
+
+Заодно зафиксированы примеры в `test_assign_intent.py` (блок REASONING_CASES): 9 реальных начал простыни (включая точную первую строку из ответа Марине) + 4 легитимных русских ответа Куратора, которые не должны отсекаться.
+
+### 42.4. Проверка
+- `test_assign_intent.py` — 46/46 (включая REASONING_CASES с точной первой строкой «The user wants to distribute…»).
+- `test_save_intent.py` — 16/16; `ruff`/`py_compile` чисто.
+
+### 42.5. Замечания
+- Урок из §39.2 повторился: **free-модели массово льют reasoning в `content`**, формализм начала ответа постоянно обходит фильтр. Список придётся доращивать по мере встречи новых формулировок — REASONING_CASES в тесте теперь страхует от регрессии уже известных.
+- Усилить фильтр по-настоящему можно только эвристикой на уровне языка+роли (англоязычное «I/we want/need/let me» в начале при русскоязычном Кураторе = reasoning). Реализовано частично через расширенный список; полноценную эвристику — отдельной задачей, если простыни вернутся.

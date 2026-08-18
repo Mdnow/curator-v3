@@ -13,6 +13,7 @@ from backend.routes.chat import (  # noqa: E402
     _has_assign_intent,
     _parse_assign_plan,
 )
+from backend.ai import _is_reasoning_noise  # noqa: E402
 
 INTENT_CASES = [
     # (текст сообщения, ожидаемое решение)
@@ -56,6 +57,25 @@ PARSE_CASES = [
 ]
 
 
+REASONING_CASES = [
+    # (начало ответа модели — должно распознаться как reasoning-шум)
+    ("The user wants to distribute their notes into folders (projects).", True),
+    ("The user wants me to organize notes by projects.", True),
+    ("I need to follow Rule 7.1 about RASPIREDELENIE PO PROEKTAML.", True),
+    ("Let's scan the notes for themes that match the existing projects.", True),
+    ("Let's categorize notes by theme:", True),
+    ("First, I need to look at the existing projects and the notes.", True),
+    ("Okay, so the user wants to sort everything into folders.", True),
+    ("So the user has asked to distribute notes into projects.", True),
+    ("My task here is to assign each note to a project.", True),
+    # (легитимные русские ответы Куратора — не должны отсекаться)
+    ("Разложила заметки по проектам: два в бизнес, один оставила.", False),
+    ("Привет! Могу разложить заметки по папкам. Начнём?", False),
+    ("У тебя три проекта: Куратор, Среда свободы, Медиа платформа.", False),
+    ("Я пока не буду трогать заметки без явной темы.", False),
+]
+
+
 def main() -> int:
     failed = 0
     print("--- intent ---")
@@ -74,7 +94,15 @@ def main() -> int:
         print(
             f"{'OK' if got == expected else 'FAIL'}  {text!r} -> {got} (expected {expected})"
         )
-    total = len(INTENT_CASES) + len(PARSE_CASES)
+    print("--- reasoning-noise ---")
+    for text, expected in REASONING_CASES:
+        got = _is_reasoning_noise(text)
+        if got != expected:
+            failed += 1
+        print(
+            f"{'OK' if got == expected else 'FAIL'}  {text[:70]!r} -> {got} (expected {expected})"
+        )
+    total = len(INTENT_CASES) + len(PARSE_CASES) + len(REASONING_CASES)
     if failed:
         print(f"\nFAILED: {failed}/{total}")
         return 1
