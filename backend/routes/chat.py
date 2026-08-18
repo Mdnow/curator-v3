@@ -159,7 +159,7 @@ async def _assign_pool_block(db, user_id: int) -> tuple[str, list[int]]:
     rows = await db.fetch(
         """SELECT id, note_date, content_encrypted, ai_title, ai_summary, ai_category
            FROM notes WHERE user_id=$1 AND project_id IS NULL
-           ORDER BY created_at DESC LIMIT 50""",
+           ORDER BY created_at DESC LIMIT 30""",
         user_id,
     )
     if not rows:

@@ -73,7 +73,7 @@ function removeCardOf(selector) {
 
 // ═══ API ═══
 const FETCH_TIMEOUT_MS = 30000;
-const CHAT_TIMEOUT_MS = 90000;
+const CHAT_TIMEOUT_MS = 150000;
 
 // Понятная причина ошибки вместо сухого «ошибка»
 function apiErrorMessage(e) {

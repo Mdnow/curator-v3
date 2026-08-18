@@ -1,3 +1,4 @@
+import asyncio
 import httpx
 import json
 from backend.config import (
@@ -771,7 +772,12 @@ CHAT_SYSTEM = """Ты — Куратор, AI-ассистент внутри п�
 """
 
 
-async def chat_with_context(messages: list[dict], system: str = "") -> str | None:
+async def chat_with_context(
+    messages: list[dict],
+    system: str = "",
+    budget: float = 120.0,
+    call_timeout: float = 55.0,
+) -> str | None:
     if not PROVIDERS:
         return None
 
@@ -780,10 +786,14 @@ async def chat_with_context(messages: list[dict], system: str = "") -> str | Non
         msgs.append({"role": "system", "content": system})
     msgs.extend(messages)
 
-    async with httpx.AsyncClient(timeout=90) as client:
+    deadline = asyncio.get_event_loop().time() + budget
+    async with httpx.AsyncClient(timeout=call_timeout) as client:
         for _ in range(2):
             for provider in PROVIDERS:
                 for model in provider["models"]:
+                    if asyncio.get_event_loop().time() > deadline:
+                        print("[ai] chat budget exhausted, stop", flush=True)
+                        return None
                     content = await _request_model(
                         client,
                         provider,
