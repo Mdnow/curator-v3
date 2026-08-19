@@ -176,3 +176,23 @@ class TikTokImportReq(BaseModel):
     @classmethod
     def _v_url(cls, v: str) -> str:
         return _check_len(v, "url", 8, 2000)
+
+
+class MemImportReq(BaseModel):
+    note_id: str
+    note_date: str = ""
+    tags: list[str] = []
+
+    @field_validator("note_id")
+    @classmethod
+    def _v_note_id(cls, v: str) -> str:
+        return _check_len(v, "note_id", 1, 100)
+
+
+class MemExportReq(BaseModel):
+    content: str
+
+    @field_validator("content")
+    @classmethod
+    def _v_content(cls, v: str) -> str:
+        return _check_len(v, "content", 1, 20000)
