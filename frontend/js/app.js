@@ -841,15 +841,7 @@ api('POST', '/ai/chat', { message: msg, goal_id: goalId, thread_id: null }, { ti
       messagesEl.innerHTML += `<div class="chat-auto-saved">куратор сохранил это в заметки</div>`;
     }
     appendAssignSummary(messagesEl, result);
-    if (result.note_refs && result.note_refs.length) {
-      const refs = result.note_refs.map(n =>
-        `<button class="chat-note-ref" data-note-id="${n.id}" data-note-content="${escAttr(n.content)}" data-note-date="${escAttr(n.note_date)}" data-note-title="${escAttr(noteTitle(n))}">` +
-          `<span class="chat-note-ref-title">${esc(noteTitle(n))}</span>` +
-          `<span class="chat-note-ref-date">${esc(fmtDate(n.note_date))}</span>` +
-        `</button>`
-      ).join('');
-      messagesEl.innerHTML += `<div class="chat-note-refs"><div class="chat-note-refs-label">куратор ссылается на заметки — нажми, чтобы прочитать полностью</div>${refs}</div>`;
-    }
+    messagesEl.innerHTML += noteRefsBlockHtml(parsed.text, result.note_refs, 'куратор ссылается на заметки — нажми, чтобы прочитать полностью');
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }).catch((err) => {
     const loadingEl = $('#chatLoading'); if (loadingEl) loadingEl.remove();
@@ -1052,17 +1044,9 @@ async function sendProjectChat() {
     }
     if (result.mem_copied) {
       messagesEl.innerHTML += `<div class="chat-auto-saved">куратор скопировал это из Mem AI в материалы проекта</div>`;
-    }
+}
     appendAssignSummary(messagesEl, result);
-    if (result.note_refs && result.note_refs.length) {
-      const refs = result.note_refs.map(n =>
-        `<button class="chat-note-ref" data-note-id="${n.id}" data-note-content="${escAttr(n.content)}" data-note-date="${escAttr(n.note_date)}" data-note-title="${escAttr(noteTitle(n))}">` +
-          `<span class="chat-note-ref-title">${esc(noteTitle(n))}</span>` +
-          `<span class="chat-note-ref-date">${esc(fmtDate(n.note_date))}</span>` +
-        `</button>`
-      ).join('');
-      messagesEl.innerHTML += `<div class="chat-note-refs"><div class="chat-note-refs-label">куратор ссылается на материалы проекта — нажми, чтобы прочитать</div>${refs}</div>`;
-    }
+    messagesEl.innerHTML += noteRefsBlockHtml(parsed.text, result.note_refs, 'куратор ссылается на материалы проекта — нажми, чтобы прочитать');
     loadProjects();
     await reloadProjectNotes();
   } catch (e) {
@@ -1320,6 +1304,24 @@ function noteInlineLinksHtml(html) {
   return out;
 }
 
+// Блок ссылок на заметки в конце ответа (T-005): выводится только для тех
+// заметок, которых нет в тексте ответа — встроенные ссылки ⟦NOTE:id⟧
+// достаточны, дублировать их отдельным блоком не нужно.
+function noteRefsBlockHtml(text, refs, label) {
+  if (!refs || !refs.length) return '';
+  const inlineIds = new Set();
+  (String(text).match(/⟦NOTE:(\d+)⟧/g) || []).forEach(m => inlineIds.add(m.match(/(\d+)/)[1]));
+  const extra = refs.filter(n => !inlineIds.has(String(n.id)));
+  if (!extra.length) return '';
+  const buttons = extra.map(n =>
+    `<button class="chat-note-ref" data-note-id="${n.id}" data-note-content="${escAttr(n.content)}" data-note-date="${escAttr(n.note_date)}" data-note-title="${escAttr(noteTitle(n))}">` +
+      `<span class="chat-note-ref-title">${esc(noteTitle(n))}</span>` +
+      `<span class="chat-note-ref-date">${esc(fmtDate(n.note_date))}</span>` +
+    `</button>`
+  ).join('');
+  return `<div class="chat-note-refs"><div class="chat-note-refs-label">${label}</div>${buttons}</div>`;
+}
+
 // Копирование: убрать служебные маркеры, оставить названия заметок.
 function noteCopyClean(clean) {
   return String(clean)
@@ -1524,15 +1526,7 @@ async function sendChat() {
       messagesEl.innerHTML += `<div class="chat-auto-saved">куратор скопировал это из Mem AI в заметки</div>`;
     }
     appendAssignSummary(messagesEl, result);
-    if (result.note_refs && result.note_refs.length) {
-      const refs = result.note_refs.map(n =>
-        `<button class="chat-note-ref" data-note-id="${n.id}" data-note-content="${escAttr(n.content)}" data-note-date="${escAttr(n.note_date)}" data-note-title="${escAttr(noteTitle(n))}">` +
-          `<span class="chat-note-ref-title">${esc(noteTitle(n))}</span>` +
-          `<span class="chat-note-ref-date">${esc(fmtDate(n.note_date))}</span>` +
-        `</button>`
-      ).join('');
-      messagesEl.innerHTML += `<div class="chat-note-refs"><div class="chat-note-refs-label">куратор ссылается на заметки — нажми, чтобы прочитать полностью</div>${refs}</div>`;
-    }
+    messagesEl.innerHTML += noteRefsBlockHtml(parsed.text, result.note_refs, 'куратор ссылается на заметки — нажми, чтобы прочитать полностью');
   } catch (e) {
     const loadingEl = $('#chatLoading'); if (loadingEl) loadingEl.remove();
     messagesEl.innerHTML += `<div class="chat-msg ai">${esc(apiErrorMessage(e))}</div>`;
