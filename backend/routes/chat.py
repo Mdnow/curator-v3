@@ -18,6 +18,144 @@ router = APIRouter(prefix="/api", tags=["chat"])
 
 _SAVE_RE = re.compile(r"\[SAVE:(.+?)\]", re.DOTALL)
 
+_MEM_COPY_RE = re.compile(r"\[MEM_COPY:([A-Za-z0-9-]+)\]")
+
+# Просьба обратиться к базе Mem AI (поиск/чтение/копирование из Mem).
+_MEM_INTENT_WORDS = (
+    "в меме",
+    "в мем",
+    "из мем",
+    "из мема",
+    "из мемов",
+    "в меме поищи",
+    "поищи в меме",
+    "поищи в мем",
+    "найди в меме",
+    "найди в мем",
+    "посмотри в меме",
+    "посмотри в мем",
+    "покажи из мем",
+    "прочитай из мем",
+    "скопируй из мем",
+    "скопируй цитату из мем",
+    "сохрани из мем",
+    "запиши из мем",
+    "mem ai",
+    "mem. ai",
+    "mem-ai",
+    "memai",
+    "второй мозг",
+    "второго мозга",
+    "втором мозге",
+    "вторым мозгом",
+    "база мем",
+    "из моей базы мем",
+    "из моего мем",
+)
+
+# «Что за мем», «смешной мем», «картинка-мем» — про мемы-картинки, не про Mem AI.
+_MEM_NEGATIVE_MARKERS = (
+    "смешной мем",
+    "смешные мемы",
+    "картинка-мем",
+    "мем с картинкой",
+    "мем-картинк",
+    "интернет-мем",
+    "мемы в интернете",
+    "что за мем",
+)
+
+
+def _has_mem_intent(message: str) -> bool:
+    """Пользователь явно просит обратиться к базе Mem AI."""
+    low = message.lower()
+    if any(m in low for m in _MEM_NEGATIVE_MARKERS):
+        return False
+    return any(w in low for w in _MEM_INTENT_WORDS)
+
+
+# Слова-обвязка просьбы, которые не должны попадать в поисковый запрос Mem.
+_MEM_QUERY_STRIP = (
+    "скопируй",
+    "скопировать",
+    "скопируйте",
+    "сохрани",
+    "сохранить",
+    "сохраните",
+    "запиши",
+    "записать",
+    "запишите",
+    "найди",
+    "найти",
+    "найдите",
+    "поищи",
+    "поискать",
+    "поищите",
+    "посмотри",
+    "посмотреть",
+    "посмотрите",
+    "покажи",
+    "показать",
+    "покажите",
+    "прочитай",
+    "прочитать",
+    "прочитайте",
+    "в меме",
+    "в мем",
+    "из мем",
+    "из мема",
+    "из мемов",
+    "в мем поищи",
+    "в меме поищи",
+    "поищи в меме",
+    "поищи в мем",
+    "найди в меме",
+    "найди в мем",
+    "посмотри в меме",
+    "посмотри в мем",
+    "покажи из мем",
+    "прочитай из мем",
+    "скопируй из мем",
+    "скопируй цитату из мем",
+    "сохрани из мем",
+    "запиши из мем",
+    "mem ai",
+    "mem-ai",
+    "memai",
+    "второй мозг",
+    "второго мозга",
+    "втором мозге",
+    "вторым мозгом",
+    "база мем",
+    "из моей базы мем",
+    "из моего мем",
+    "себе в заметки",
+    "в свои заметки",
+    "в мои заметки",
+    "в заметки",
+    "в заметку",
+    "себе",
+    "пожалуйста",
+    "во",
+    "что",
+    "где",
+    "какие",
+    "есть",
+)
+
+
+def _extract_mem_query(message: str) -> str:
+    """Чистый поисковый запрос для Mem: убираем слова-обвязку просьбы.
+
+    «скопируй из мем цитату про свободу себе в заметки» → «цитату про свободу».
+    """
+    q = message
+    for w in _MEM_QUERY_STRIP:
+        q = q.replace(w, " ")
+    q = " ".join(q.split()).strip()
+    return q or message.strip()
+
+
 _SAVE_INTENT_WORDS = (
     "сохрани",
     "сохраните",
@@ -466,6 +604,40 @@ async def _chat_reply_tx(
     # пула ниже.
     assign_intent = _has_assign_intent(request_message)
 
+    # Обращение к базе Mem AI (ADR-0018): по явной просьбе ищем заметки
+    # в Mem и даём их куратору в контекст (id/title/сниппет), чтобы он
+    # отвечал по реальным данным и мог скопировать нужное маркером
+    # [MEM_COPY:...]. Токены при этом не раздуваются — это компактный блок.
+    mem_intent = _has_mem_intent(request_message)
+    mem_block = ""
+    if mem_intent:
+        from backend import mem_api
+
+        try:
+            query = _extract_mem_query(request_message)
+            mem_results = await mem_api.mem_search(query, limit=5)
+        except Exception as e:
+            print(f"[mem] search failed: {e}", flush=True)
+            mem_results = []
+        if mem_results:
+            lines = "\n".join(
+                f"- [mem={r['id']}] {r['title']}: {r['snippet'][:200]}"
+                for r in mem_results
+            )
+            mem_block = (
+                "\n\nMEM AI (заметки из «второго мозга» Марины по её запросу):\n"
+                + lines
+                + "\n\nЕсли Марина просит скопировать что-то из Mem в её заметки — "
+                "добавь в конец ответа маркер [MEM_COPY:id] с ТОЛЬКО реальным id "
+                "из этого списка (числа/идентификаторы после [mem=). Иначе маркер "
+                "не ставь."
+            )
+        else:
+            mem_block = (
+                "\n\nMEM AI: по запросу ничего не нашлось в базе Mem. Так и скажи "
+                "Марине честно, не выдумывай содержимое Mem."
+            )
+
     # В контексте куратора — материалы проекта, если диалог внутри проекта.
     notes = []
     fav_notes = []
@@ -555,7 +727,7 @@ async def _chat_reply_tx(
 
     if assign_intent:
         # Лёгкий контекст: полные тексты не нужны, хватит компактного пула.
-        system = CHAT_SYSTEM + goal_context
+        system = CHAT_SYSTEM + goal_context + mem_block
     else:
         system = (
             CHAT_SYSTEM
@@ -563,6 +735,7 @@ async def _chat_reply_tx(
             + pattern_block
             + fav_context
             + goal_context
+            + mem_block
         )
 
     # Проекты — контейнеры заметок: куратор видит их, чтобы советовать
@@ -653,6 +826,37 @@ async def _chat_reply_tx(
         if _has_assign_intent(request_message):
             assigned = await _apply_assign_plan(db, user_id, assign_plan)
 
+    # Копирование из Mem AI: маркер [MEM_COPY:id] уважается только при явной
+    # просьбе обратиться к Mem (как [SAVE:]/[ASSIGN:] — защита от самовольных
+    # действий free-моделей). Маркер вырезается в любом случае.
+    mem_copied = None
+    mem_copy_match = _MEM_COPY_RE.search(result)
+    if mem_copy_match:
+        mem_note_id = mem_copy_match.group(1)
+        result = _MEM_COPY_RE.sub("", result).strip()
+        if _has_mem_intent(request_message):
+            try:
+                from backend import mem_api
+
+                note = await mem_api.mem_read(mem_note_id)
+                text = note.get("content", "").strip()
+                if text:
+                    saved = await _save_note(db, user_id, text, background, project_id)
+                    # Помечаем источник: копия из Mem AI (как в /api/mem/import).
+                    await db.execute(
+                        "UPDATE notes SET tags=$1 WHERE id=$2 AND user_id=$3",
+                        json.dumps(["mem"]),
+                        saved["note_id"],
+                        user_id,
+                    )
+                    mem_copied = {
+                        "mem_id": mem_note_id,
+                        "note_id": saved["note_id"],
+                        "title": note.get("title", ""),
+                    }
+            except Exception as e:
+                print(f"[mem] copy failed: {e}", flush=True)
+
     if project_id is not None:
         await db.execute(
             """INSERT INTO chat_history (user_id, role, content, project_id)
@@ -685,6 +889,7 @@ async def _chat_reply_tx(
         "auto_saved": [],
         "saved": saved,
         "assigned": assigned,
+        "mem_copied": mem_copied,
         "note_refs": note_refs,
         "thread_id": thread_id,
         "session_id": thread_id,

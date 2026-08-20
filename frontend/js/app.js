@@ -1050,6 +1050,9 @@ async function sendProjectChat() {
     if (result.saved && result.saved.text) {
       messagesEl.innerHTML += `<div class="chat-auto-saved">куратор сохранил это в материалы проекта</div>`;
     }
+    if (result.mem_copied) {
+      messagesEl.innerHTML += `<div class="chat-auto-saved">куратор скопировал это из Mem AI в материалы проекта</div>`;
+    }
     appendAssignSummary(messagesEl, result);
     if (result.note_refs && result.note_refs.length) {
       const refs = result.note_refs.map(n =>
@@ -1516,6 +1519,9 @@ async function sendChat() {
     preloadInlineNoteIds(parsed.text, messagesEl);
     if (result.saved && result.saved.text) {
       messagesEl.innerHTML += `<div class="chat-auto-saved">куратор сохранил это в заметки</div>`;
+    }
+    if (result.mem_copied) {
+      messagesEl.innerHTML += `<div class="chat-auto-saved">куратор скопировал это из Mem AI в заметки</div>`;
     }
     appendAssignSummary(messagesEl, result);
     if (result.note_refs && result.note_refs.length) {
