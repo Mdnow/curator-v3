@@ -7,6 +7,7 @@ from backend.crypto import encrypt
 from backend.models import MemImportReq, MemExportReq
 from backend import mem_api
 from backend.ai import embed_text
+from backend import mem_sync
 import json
 
 router = APIRouter(prefix="/api/mem", tags=["mem"])
@@ -93,3 +94,30 @@ async def mem_export(req: MemExportReq, user_id: int = Depends(get_current_user)
     except RuntimeError as e:
         raise HTTPException(502, f"Mem API: {e}")
     return {"mem_id": created["id"], "title": created["title"]}
+
+
+@router.post("/sync")
+async def mem_sync_start(user_id: int = Depends(get_current_user)):
+    """Запуск синка Obsidian-базы в mem_notes (локально, без VPN)."""
+    result = await mem_sync.run_obsidian_sync()
+    if "error" in result:
+        raise HTTPException(400, result["error"])
+    return result
+
+
+@router.get("/sync-status")
+async def mem_sync_status(user_id: int = Depends(get_current_user)):
+    return mem_sync.sync_status()
+
+
+@router.get("/search-local")
+async def mem_search_local(
+    q: str = "", limit: int = 8, user_id: int = Depends(get_current_user)
+):
+    """Поиск по синкнутой Obsidian-базе (локально, по смыслу)."""
+    q = q.strip()
+    if not q:
+        raise HTTPException(400, "нужен текст запроса (q)")
+    limit = min(max(limit, 1), 20)
+    results = await mem_sync.mem_search_local(q, limit=limit)
+    return {"query": q, "count": len(results), "results": results}

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import re
@@ -644,6 +645,42 @@ async def _chat_reply_tx(
                 "Марине честно, не выдумывай содержимое Mem."
             )
 
+    # Авто-поиск по синкнутой базе Obsidian (ADR-0019): без явной просьбы
+    # куратор сверяет тему диалога с прошлыми мыслями Марины и показывает
+    # «ты уже думала об этом раньше». Работает локально (fastembed на проде
+    # не запускается). Модель грузится лениво и прогревается в фоне.
+    auto_block = ""
+    if not mem_intent and not assign_intent:
+        try:
+            from backend import mem_sync
+
+            if mem_sync._embedder is None:
+                # Первый раз: прогреваем модель в фоне, не блокируя ответ.
+                try:
+                    asyncio.create_task(asyncio.to_thread(mem_sync._get_embedder))
+                except Exception:
+                    pass
+            else:
+                auto_results = await mem_sync.mem_search_local(request_message, limit=4)
+                hits = [r for r in auto_results if r.get("dist", 99) < 1.2]
+                if hits:
+                    lines = "\n".join(
+                        f"- [{r['date'] or 'без даты'}] {r['title'][:80]}: "
+                        f"{r['snippet'][:140]}"
+                        for r in hits
+                    )
+                    auto_block = (
+                        "\n\nТЫ УЖЕ ДУМАЛА ОБ ЭТОМ РАНЬШЕ (из твоего второго мозга, "
+                        "синк Obsidian):\n"
+                        + lines
+                        + "\n\nЕсли тема совпадает с прошлыми мыслями — отметь это "
+                        "Марине: назови, когда она писала об этом (даты выше), и что "
+                        "тогда было важно. Если ничего существенного — просто игнорируй "
+                        "блок."
+                    )
+        except Exception as e:
+            print(f"[mem_local] auto-search skipped: {e}", flush=True)
+
     # В контексте куратора — материалы проекта, если диалог внутри проекта.
     notes = []
     fav_notes = []
@@ -733,7 +770,7 @@ async def _chat_reply_tx(
 
     if assign_intent:
         # Лёгкий контекст: полные тексты не нужны, хватит компактного пула.
-        system = CHAT_SYSTEM + goal_context + mem_block
+        system = CHAT_SYSTEM + goal_context + mem_block + auto_block
     else:
         system = (
             CHAT_SYSTEM
@@ -742,6 +779,7 @@ async def _chat_reply_tx(
             + fav_context
             + goal_context
             + mem_block
+            + auto_block
         )
 
     # Проекты — контейнеры заметок: куратор видит их, чтобы советовать

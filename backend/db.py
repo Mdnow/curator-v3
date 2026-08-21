@@ -162,6 +162,28 @@ async def init_db():
         await db.execute(
             "CREATE INDEX IF NOT EXISTS idx_note_embeddings_user ON note_embeddings(user_id)"
         )
+        # Синк-копия базы Mem AI (ADR-0019): полный корпус заметок с эмбеддингами.
+        # Куратор ищет по ним локально (без VPN и лимитов search-API Mem).
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS mem_notes (
+                id SERIAL PRIMARY KEY,
+                mem_id TEXT NOT NULL UNIQUE,
+                title TEXT NOT NULL DEFAULT '',
+                content_encrypted TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT '',
+                synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS mem_note_embeddings (
+                note_id INTEGER PRIMARY KEY REFERENCES mem_notes(id) ON DELETE CASCADE,
+                embedding vector(768),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_mem_notes_created ON mem_notes(created_at)"
+        )
         # Migrate existing v2 tables — add missing columns
         note_cols = await db.fetch(
             "SELECT column_name FROM information_schema.columns WHERE table_name='notes'"
