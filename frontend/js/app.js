@@ -838,7 +838,7 @@ api('POST', '/ai/chat', { message: msg, goal_id: goalId, thread_id: null }, { ti
       messagesEl.innerHTML += chatMsgHtml('ai', parsed.text);
       preloadInlineNoteIds(parsed.text, messagesEl);
     if (result.saved && result.saved.text) {
-      messagesEl.innerHTML += `<div class="chat-auto-saved">куратор сохранил это в заметки</div>`;
+      messagesEl.innerHTML += chatActionHtml('куратор сохранил это в заметки', 'undo-note', result.saved.note_id);
     }
     appendAssignSummary(messagesEl, result);
     messagesEl.innerHTML += noteRefsBlockHtml(parsed.text, result.note_refs, 'куратор ссылается на заметки — нажми, чтобы прочитать полностью');
@@ -1040,10 +1040,10 @@ async function sendProjectChat() {
     messagesEl.innerHTML += chatMsgHtml('ai', parsed.text);
     preloadInlineNoteIds(parsed.text, messagesEl);
     if (result.saved && result.saved.text) {
-      messagesEl.innerHTML += `<div class="chat-auto-saved">куратор сохранил это в материалы проекта</div>`;
+      messagesEl.innerHTML += chatActionHtml('куратор сохранил это в материалы проекта', 'undo-note', result.saved.note_id);
     }
     if (result.mem_copied) {
-      messagesEl.innerHTML += `<div class="chat-auto-saved">куратор скопировал это из Mem AI в материалы проекта</div>`;
+      messagesEl.innerHTML += chatActionHtml('куратор скопировал это из Mem AI в материалы проекта', 'undo-note', result.mem_copied.note_id);
 }
     appendAssignSummary(messagesEl, result);
     messagesEl.innerHTML += noteRefsBlockHtml(parsed.text, result.note_refs, 'куратор ссылается на материалы проекта — нажми, чтобы прочитать');
@@ -1420,11 +1420,12 @@ function appendAssignSummary(messagesEl, result) {
   const byProject = {};
   assigned.forEach(a => { (byProject[a.project] = byProject[a.project] || []).push(a.note_id); });
   const lines = Object.entries(byProject).map(([proj, ids]) => `${ids.length} → «${proj}»`).join(', ');
-  let html = `<div class="chat-assigned">куратор разложила по проектам: ${esc(lines)}`;
+  const undoData = JSON.stringify(assigned.map(a => ({ note_id: a.note_id, prev_project_id: a.prev_project_id || 0 })));
+  let html = `<div class="chat-auto-saved">куратор разложила по проектам: ${esc(lines)}`;
   if (created_projects && created_projects.length) {
     html += ` · созданы проекты: ${esc(created_projects.join(', '))}`;
   }
-  html += '</div>';
+  html += ` <button class="chat-undo-btn" data-undo-assign="${escAttr(undoData)}">отменить</button></div>`;
   messagesEl.innerHTML += html;
   loadProjects().catch(() => {});
 }
@@ -1447,6 +1448,36 @@ async function copyChatText(text) {
 
 async function saveThought(text) {
   try { await api('POST', '/ai/save-thought', { message: text }); toast('мысль сохранена'); } catch (e) { toast(apiErrorMessage(e)); }
+}
+
+// Блок выполненного действия (T-006): куратор действует сразу без вопросов,
+// альтернатива — кнопка «отменить» рядом с результатом, не диалог.
+function chatActionHtml(label, attrName, attrValue) {
+  return `<div class="chat-auto-saved">${esc(label)} <button class="chat-undo-btn" data-${attrName}="${escAttr(String(attrValue))}">отменить</button></div>`;
+}
+
+async function undoChatAction(btn) {
+  const block = btn.closest('.chat-auto-saved');
+  if (btn.dataset.undoNote) {
+    try {
+      await api('DELETE', '/notes/' + btn.dataset.undoNote);
+      if (block) block.remove();
+      toast('заметка удалена');
+    } catch (e) { toast(apiErrorMessage(e)); }
+    return;
+  }
+  if (btn.dataset.undoAssign) {
+    let entries;
+    try { entries = JSON.parse(btn.dataset.undoAssign); } catch (e) { return; }
+    try {
+      for (const en of entries) {
+        await api('PUT', '/notes/' + en.note_id, { project_id: en.prev_project_id || 0 });
+      }
+      if (block) block.remove();
+      toast('раскладка отменена');
+      loadProjects().catch(() => {});
+    } catch (e) { toast(apiErrorMessage(e)); }
+  }
 }
 
 function openNoteModal(note) {
@@ -1520,10 +1551,10 @@ async function sendChat() {
     messagesEl.innerHTML += chatMsgHtml('ai', parsed.text);
     preloadInlineNoteIds(parsed.text, messagesEl);
     if (result.saved && result.saved.text) {
-      messagesEl.innerHTML += `<div class="chat-auto-saved">куратор сохранил это в заметки</div>`;
+      messagesEl.innerHTML += chatActionHtml('куратор сохранил это в заметки', 'undo-note', result.saved.note_id);
     }
     if (result.mem_copied) {
-      messagesEl.innerHTML += `<div class="chat-auto-saved">куратор скопировал это из Mem AI в заметки</div>`;
+      messagesEl.innerHTML += chatActionHtml('куратор скопировал это из Mem AI в заметки', 'undo-note', result.mem_copied.note_id);
     }
     appendAssignSummary(messagesEl, result);
     messagesEl.innerHTML += noteRefsBlockHtml(parsed.text, result.note_refs, 'куратор ссылается на заметки — нажми, чтобы прочитать полностью');
@@ -2077,6 +2108,8 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#chatMessages').addEventListener('click', e => {
     const save = e.target.closest('.btn-save-thought');
     if (save) { saveThought(save.dataset.save); return; }
+    const undo = e.target.closest('.chat-undo-btn');
+    if (undo) { undoChatAction(undo); return; }
     const copy = e.target.closest('.chat-copy');
     if (copy) copyChatText(copy.dataset.copy);
     const ref = e.target.closest('.chat-note-ref');
@@ -2201,6 +2234,8 @@ $('#archiveList').addEventListener('click', e => {
     }
   });
   $('#projectChatMessages').addEventListener('click', e => {
+    const undo = e.target.closest('.chat-undo-btn');
+    if (undo) { undoChatAction(undo); return; }
     const ref = e.target.closest('.chat-note-ref');
     if (ref) openNoteModal({ id: ref.dataset.noteId, content: ref.dataset.noteContent, date: ref.dataset.noteDate, title: ref.dataset.noteTitle });
   });

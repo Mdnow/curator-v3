@@ -438,7 +438,13 @@ async def _apply_assign_plan(db, user_id: int, plan: dict[int, int | str]) -> di
         if new_project and proj_name not in summary["created_projects"]:
             summary["created_projects"].append(proj_name)
         summary["assigned"].append(
-            {"note_id": note_id, "project": proj_name, "new_project": new_project}
+            {
+                "note_id": note_id,
+                "project": proj_name,
+                "new_project": new_project,
+                # Прежний проект (или null) — для отката кнопкой в UI.
+                "prev_project_id": note["project_id"],
+            }
         )
     return summary
 
