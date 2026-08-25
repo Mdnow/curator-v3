@@ -14,17 +14,21 @@ _RETRYABLE = (
 )
 
 
-async def get_pool() -> asyncpg.Pool:
+async def get_pool(force: bool = False) -> asyncpg.Pool:
     global _pool
-    if _pool is None:
-        _pool = await asyncpg.create_pool(
-            DATABASE_URL,
-            min_size=1,
-            max_size=10,
-            # Neon гасит compute после ~5 мин простоя и рвёт idle-коннекты.
-            # Короткий lifetime заставляет пул сам отбрасывать протухшие.
-            max_inactive_connection_lifetime=30.0,
-        )
+    if _pool is not None and not force:
+        return _pool
+    if _pool is not None:
+        try:
+            await _pool.close()
+        except Exception:
+            pass
+    _pool = await asyncpg.create_pool(
+        DATABASE_URL,
+        min_size=1,
+        max_size=10,
+        max_inactive_connection_lifetime=30.0,
+    )
     return _pool
 
 

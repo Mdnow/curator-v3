@@ -207,35 +207,54 @@ async def _embed_batch(texts: list[str]) -> list[list[float] | None]:
         return [None] * len(texts)
 
 
-async def _insert_batch(pool, batch: list[dict], vecs: list[list[float] | None]):
-    """Пакетная вставка заметок Obsidian. Без эмбеддинга НЕ вставляем —
-    такая заметка бесполезна для поиска и будет переобработана при след. запуске."""
-    async with pool.acquire() as db:
-        for idx, f in enumerate(batch):
-            vec = vecs[idx]
-            if not vec:
-                STATE["failed"] += 1
-                continue
+async def _insert_batch(
+    pool_ref: list, batch: list[dict], vecs: list[list[float] | None]
+):
+    """Пакетная вставка заметок Obsidian. Без эмбеддинга НЕ вставляем.
+    pool_ref — mutable [pool], чтобы обновить пул при обрыве."""
+    for idx, f in enumerate(batch):
+        vec = vecs[idx]
+        if not vec:
+            STATE["failed"] += 1
+            continue
+        for attempt in range(3):
             try:
-                row = await db.fetchrow(
-                    """INSERT INTO mem_notes
-                           (mem_id, title, content_encrypted, created_at)
-                       VALUES ($1,$2,$3,$4) RETURNING id""",
-                    f"obsidian:{f['path']}",
-                    f["title"],
-                    encrypt(f["content"]),
-                    f["date"],
-                )
-                local_id = row["id"]
-                await db.execute(
-                    """INSERT INTO mem_note_embeddings (note_id, embedding)
-                       VALUES ($1,$2)""",
-                    local_id,
-                    str(vec),
-                )
+                pool = pool_ref[0]
+                async with pool.acquire() as db:
+                    row = await db.fetchrow(
+                        """INSERT INTO mem_notes
+                               (mem_id, title, content_encrypted, created_at)
+                           VALUES ($1,$2,$3,$4) RETURNING id""",
+                        f"obsidian:{f['path']}",
+                        f["title"],
+                        encrypt(f["content"]),
+                        f["date"],
+                    )
+                    local_id = row["id"]
+                    await db.execute(
+                        """INSERT INTO mem_note_embeddings (note_id, embedding)
+                           VALUES ($1,$2)""",
+                        local_id,
+                        str(vec),
+                    )
+                break
             except Exception as e:
-                STATE["failed"] += 1
                 STATE["last_error"] = f"insert {f['name'][:40]}: {e}"
+                print(
+                    f"[mem_sync] INSERT FAIL (attempt {attempt + 1}) {f['name'][:50]}: {type(e).__name__}: {e}",
+                    flush=True,
+                )
+                # Neon закрыл соединение — пересоздаём пул
+                if attempt < 2:
+                    try:
+                        old = pool_ref[0]
+                        await old.close()
+                    except Exception:
+                        pass
+                    pool_ref[0] = await get_pool(force=True)
+                    await asyncio.sleep(1)
+                else:
+                    STATE["failed"] += 1
 
 
 async def run_obsidian_sync() -> dict:
@@ -258,6 +277,7 @@ async def run_obsidian_sync() -> dict:
     )
     try:
         pool = await get_pool()
+        pool_ref = [pool]
         files = collect_obsidian_files(OBSIDIAN_ROOT)
         STATE["total"] = len(files)
 
@@ -266,7 +286,6 @@ async def run_obsidian_sync() -> dict:
             rows = await db.fetch("SELECT mem_id FROM mem_notes")
             existing = {r["mem_id"] for r in rows}
 
-        # Новые файлы (ещё не в базе) — им нужен эмбеддинг.
         to_insert = []
         for f in files:
             mem_id = f"obsidian:{f['path']}"
@@ -280,11 +299,10 @@ async def run_obsidian_sync() -> dict:
             f"[obsidian_sync] новых: {len(to_insert)}, уже есть: {STATE['skipped']}",
             flush=True,
         )
-        # Инкрементально: эмбеддинг+запись батчами по 50.
         for i in range(0, len(to_insert), 50):
             batch = to_insert[i : i + 50]
             vecs = await _embed_batch([f["content"] for f in batch])
-            await _insert_batch(pool, batch, vecs)
+            await _insert_batch(pool_ref, batch, vecs)
             STATE["done"] += len(batch)
             if STATE["done"] % 100 == 0 or i + 50 >= len(to_insert):
                 print(
