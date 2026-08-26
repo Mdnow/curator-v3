@@ -7,6 +7,7 @@ import os
 from backend.db import init_db
 from backend.auth import hash_password, verify_password, create_token, get_current_user
 from backend.models import RegisterReq, LoginReq
+from backend.ratelimit import RateLimiter
 
 from backend.routes.notes import router as notes_router
 from backend.routes.tasks import router as tasks_router
@@ -38,6 +39,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(RateLimiter)
 
 app.include_router(notes_router)
 app.include_router(tasks_router)
