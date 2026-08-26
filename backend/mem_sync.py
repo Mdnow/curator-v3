@@ -211,7 +211,8 @@ async def _insert_batch(
     pool_ref: list, batch: list[dict], vecs: list[list[float] | None]
 ):
     """Пакетная вставка заметок Obsidian. Без эмбеддинга НЕ вставляем.
-    pool_ref — mutable [pool], чтобы обновить пул при обрыве."""
+    pool_ref — mutable [pool], чтобы обновить пул при обрыве.
+    content_plaintext заполняется для tsvector-поиска на проде."""
     for idx, f in enumerate(batch):
         vec = vecs[idx]
         if not vec:
@@ -223,11 +224,13 @@ async def _insert_batch(
                 async with pool.acquire() as db:
                     row = await db.fetchrow(
                         """INSERT INTO mem_notes
-                               (mem_id, title, content_encrypted, created_at)
-                           VALUES ($1,$2,$3,$4) RETURNING id""",
+                               (mem_id, title, content_encrypted, content_plaintext,
+                                created_at)
+                           VALUES ($1,$2,$3,$4,$5) RETURNING id""",
                         f"obsidian:{f['path']}",
                         f["title"],
                         encrypt(f["content"]),
+                        f["content"][:10000],
                         f["date"],
                     )
                     local_id = row["id"]
@@ -244,7 +247,6 @@ async def _insert_batch(
                     f"[mem_sync] INSERT FAIL (attempt {attempt + 1}) {f['name'][:50]}: {type(e).__name__}: {e}",
                     flush=True,
                 )
-                # Neon закрыл соединение — пересоздаём пул
                 if attempt < 2:
                     try:
                         old = pool_ref[0]
@@ -363,6 +365,48 @@ async def mem_search_local(query: str, limit: int = 8) -> list[dict]:
                 "created_at": r["created_at"],
                 "date": (r["created_at"] or "")[:10],
                 "dist": r["dist"],
+            }
+        )
+    return results
+
+
+# -------------------- полнотекстовый поиск (tsvector) --------------------
+
+
+async def mem_text_search(query: str, limit: int = 8) -> list[dict]:
+    """Поиск по ключевым словам через PostgreSQL tsvector.
+    Работает на проде без AI-моделей — бесплатно, быстро, в 512 MB."""
+    try:
+        pool = await get_pool()
+    except Exception:
+        return []
+    try:
+        async with pool.acquire() as db:
+            rows = await db.fetch(
+                """SELECT n.id, n.mem_id, n.title, n.content_plaintext,
+                          n.created_at,
+                          ts_rank(n.tsvect_search,
+                            plainto_tsquery('russian', $1)) AS rank
+                   FROM mem_notes n
+                   WHERE n.tsvect_search @@ plainto_tsquery('russian', $1)
+                   ORDER BY rank DESC
+                   LIMIT $2""",
+                query,
+                limit,
+            )
+    except Exception as e:
+        print(f"[mem_text_search] ERROR: {type(e).__name__}: {e}", flush=True)
+        return []
+    results = []
+    for r in rows:
+        results.append(
+            {
+                "id": r["mem_id"],
+                "title": r["title"],
+                "snippet": (r["content_plaintext"] or "")[:300],
+                "created_at": r["created_at"],
+                "date": (r["created_at"] or "")[:10],
+                "rank": float(r["rank"]),
             }
         )
     return results

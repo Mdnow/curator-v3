@@ -121,3 +121,16 @@ async def mem_search_local(
     limit = min(max(limit, 1), 20)
     results = await mem_sync.mem_search_local(q, limit=limit)
     return {"query": q, "count": len(results), "results": results}
+
+
+@router.get("/search-text")
+async def mem_search_text(
+    q: str = "", limit: int = 8, user_id: int = Depends(get_current_user)
+):
+    """Полнотекстовый поиск по заметкам (tsvector, работает на проде)."""
+    q = q.strip()
+    if not q:
+        raise HTTPException(400, "нужен текст запроса (q)")
+    limit = min(max(limit, 1), 20)
+    results = await mem_sync.mem_text_search(q, limit=limit)
+    return {"query": q, "count": len(results), "results": results}

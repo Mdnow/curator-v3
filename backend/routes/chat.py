@@ -1,4 +1,3 @@
-import asyncio
 import json
 import os
 import re
@@ -647,37 +646,38 @@ async def _chat_reply_tx(
 
     # Авто-поиск по синкнутой базе Obsidian (ADR-0019): без явной просьбы
     # куратор сверяет тему диалога с прошлыми мыслями Марины и показывает
-    # «ты уже думала об этом раньше». Работает локально (fastembed на проде
-    # не запускается). Модель грузится лениво и прогревается в фоне.
+    # «ты уже думала об этом раньше».
+    # Локально: fastembed (semantic). На проде: tsvector (ключевые слова).
     auto_block = ""
     if not mem_intent and not assign_intent:
         try:
             from backend import mem_sync
 
-            if mem_sync._embedder is None:
-                # Первый раз: прогреваем модель в фоне, не блокируя ответ.
-                try:
-                    asyncio.create_task(asyncio.to_thread(mem_sync._get_embedder))
-                except Exception:
-                    pass
-            else:
+            auto_results = []
+            # Пробуем semantic-поиск (fastembed, работает локально)
+            if mem_sync._embedder is not None:
                 auto_results = await mem_sync.mem_search_local(request_message, limit=4)
                 hits = [r for r in auto_results if r.get("dist", 99) < 1.2]
-                if hits:
-                    lines = "\n".join(
-                        f"- [{r['date'] or 'без даты'}] {r['title'][:80]}: "
-                        f"{r['snippet'][:140]}"
-                        for r in hits
-                    )
-                    auto_block = (
-                        "\n\nТЫ УЖЕ ДУМАЛА ОБ ЭТОМ РАНЬШЕ (из твоего второго мозга, "
-                        "синк Obsidian):\n"
-                        + lines
-                        + "\n\nЕсли тема совпадает с прошлыми мыслями — отметь это "
-                        "Марине: назови, когда она писала об этом (даты выше), и что "
-                        "тогда было важно. Если ничего существенного — просто игнорируй "
-                        "блок."
-                    )
+            else:
+                # На проде: полнотекстовый поиск (tsvector, без AI-моделей)
+                auto_results = await mem_sync.mem_text_search(request_message, limit=4)
+                hits = [r for r in auto_results if r.get("rank", 0) > 0]
+
+            if hits:
+                lines = "\n".join(
+                    f"- [{r.get('date') or 'без даты'}] {r['title'][:80]}: "
+                    f"{r.get('snippet', '')[:140]}"
+                    for r in hits
+                )
+                auto_block = (
+                    "\n\nТЫ УЖЕ ДУМАЛА ОБ ЭТОМ РАНЬШЕ (из твоего второго мозга, "
+                    "синк Obsidian):\n"
+                    + lines
+                    + "\n\nЕсли тема совпадает с прошлыми мыслями — отметь это "
+                    "Марине: назови, когда она писала об этом (даты выше), и что "
+                    "тогда было важно. Если ничего существенного — просто игнорируй "
+                    "блок."
+                )
         except Exception as e:
             print(f"[mem_local] auto-search skipped: {e}", flush=True)
 

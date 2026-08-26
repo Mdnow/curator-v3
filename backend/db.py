@@ -188,6 +188,42 @@ async def init_db():
         await db.execute(
             "CREATE INDEX IF NOT EXISTS idx_mem_notes_created ON mem_notes(created_at)"
         )
+        # tsvector для полнотекстового поиска по заметкам (ADR-0019).
+        # Работает на проде без AI-моделей — PostgreSQL ищет сам.
+        await db.execute("""
+            ALTER TABLE mem_notes
+            ADD COLUMN IF NOT EXISTS content_plaintext TEXT NOT NULL DEFAULT ''
+        """)
+        await db.execute("""
+            ALTER TABLE mem_notes
+            ADD COLUMN IF NOT EXISTS tsvect_search tsvector
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_mem_notes_tsvect
+            ON mem_notes USING GIN(tsvect_search)
+        """)
+        # Триггер: автоматически заполняет tsvector из plaintext
+        await db.execute("""
+            CREATE OR REPLACE FUNCTION mem_notes_tsvect_trigger()
+            RETURNS trigger AS $$
+            BEGIN
+                NEW.tsvect_search :=
+                    setweight(to_tsvector('russian', coalesce(NEW.title, '')), 'A') ||
+                    setweight(to_tsvector('russian', coalesce(NEW.content_plaintext, '')), 'B');
+                RETURN NEW;
+            END
+            $$ LANGUAGE plpgsql
+        """)
+        await db.execute("""
+            DROP TRIGGER IF EXISTS tsvector_update ON mem_notes
+        """)
+        await db.execute("""
+            CREATE TRIGGER tsvector_update
+            BEFORE INSERT OR UPDATE OF title, content_plaintext
+            ON mem_notes
+            FOR EACH ROW
+            EXECUTE FUNCTION mem_notes_tsvect_trigger()
+        """)
         # Migrate existing v2 tables — add missing columns
         note_cols = await db.fetch(
             "SELECT column_name FROM information_schema.columns WHERE table_name='notes'"
