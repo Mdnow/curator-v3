@@ -267,60 +267,36 @@ async function loadNotes() {
     const notes = await api('GET', '/notes?date=' + selectedDate);
     if (!notes.length) { $('#notesList').innerHTML = ''; $('#emptyState').style.display = 'block'; return; }
     $('#emptyState').style.display = 'none';
-    const groups = clusterNotes(notes);
-    let html = '';
-    for (const [title, items] of Object.entries(groups)) {
-      html += `<div class="note-group"><div class="group-header"><span class="group-label">${esc(title)}</span><span class="group-count">${items.length}</span><div class="group-line"></div></div><div class="notes-grid">`;
-      for (const note of items) {
-        const time = fmtTimeMsk(note.created_at, false);
-        const title = noteTitle(note);
-        const summary = noteSummary(note);
-        let aiHtml = '';
-        if (note.ai_category || (note.ai_theses && note.ai_theses.length)) {
-          const sent = note.ai_sentiment;
-          const sentLabel = sent > 0.3 ? 'светлое' : sent < -0.3 ? 'тёмное' : '';
-          const thesesHtml = (note.ai_theses && note.ai_theses.length)
-            ? `<div class="note-ai-theses">${note.ai_theses.map(t => `<div class="note-ai-thesis">${esc(t)}</div>`).join('')}</div>`
-            : '';
-          aiHtml = `<div class="note-ai">
-            ${note.ai_category ? `<span class="note-ai-category">${esc(note.ai_category)}</span>` : ''}
-            ${thesesHtml}
-            ${sentLabel ? `<span class="note-ai-sentiment">${sentLabel}</span>` : ''}
-          </div>`;
-        }
-        let threadHtml = '';
-        if (note.thread_id) {
-          threadHtml = `<div class="note-thread" data-thread="${esc(note.thread_id)}">нить: ${esc(note.thread_id.slice(0,8))}</div>`;
-        }
-        html += `<div class="note-card ${note.is_favorited ? 'favorited' : ''}" data-note-id="${note.id}">
-          <div class="note-title">${esc(title)}</div>
-          <div class="note-summary">${esc(summary)}</div>
-          <div class="note-body" hidden>
-            <div class="note-content" data-note-text="${escAttr(note.content)}">${esc(note.content)}</div>
-            ${threadHtml}${aiHtml}
-          </div>
-          <div class="note-actions">
-            <button class="note-action-btn" data-edit-note="${note.id}" title="редактировать">&#9998;</button>
-            <button class="note-action-btn" data-discuss-note="${note.id}" data-discuss-text="${escAttr(note.content)}" title="обсудить с куратором">&#9671;</button>
-          </div>
-          <div class="note-meta">
-            <button class="note-fav" data-fav-note="${note.id}" title="в избранное">${note.is_favorited ? '&#9733;' : '&#9734;'}</button>
-            <button class="note-assign-btn ${note.project_id ? 'assigned' : ''}" data-assign-note="${note.id}" data-assign-cur="${note.project_id || 0}" title="${note.project_id ? 'сменить проект' : 'в проект'}">
-              <svg class="assign-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                <line x1="12" y1="11" x2="12" y2="17"></line>
-                <line x1="9" y1="14" x2="15" y2="14"></line>
-              </svg>
-            </button>
-            <span class="note-expand-btn" data-expand-note="${note.id}" title="развернуть текст">показать текст</span>
-            <span class="note-time">${time}</span>
-            ${note.mood ? `<span class="note-mood">${esc(note.mood)}</span>` : ''}
-            <button class="note-delete" data-id="${note.id}">&#10005;</button>
-          </div>
-        </div>`;
-      }
-      html += '</div></div>';
+    const decl = notes.length === 1 ? 'заметка' : (notes.length < 5 ? 'заметки' : 'заметок');
+    let html = `<div class="notes-list-header"><span class="notes-list-count">${notes.length} ${decl}</span><div class="notes-list-line"></div></div><div class="notes-list">`;
+    for (const note of notes) {
+      const time = fmtTimeMsk(note.created_at, false);
+      const title = noteTitle(note);
+      const aiTags = [];
+      if (note.ai_category) aiTags.push(note.ai_category);
+      const sent = note.ai_sentiment;
+      if (sent > 0.3) aiTags.push('светлое');
+      else if (sent < -0.3) aiTags.push('тёмное');
+      const tagsHtml = aiTags.length ? `<div class="note-row-ai">${aiTags.map(t => `<span class="note-row-tag">${esc(t)}</span>`).join('')}</div>` : '';
+      html += `<div class="note-row ${note.is_favorited ? 'favorited' : ''}" data-note-id="${note.id}">
+        <span class="note-row-time">${time}</span>
+        <div class="note-row-main">
+          <span class="note-row-title" data-expand-note="${note.id}">${esc(title)}</span>
+        </div>
+        <div class="note-row-actions">
+          <button class="note-row-btn star ${note.is_favorited ? 'on' : ''}" data-fav-note="${note.id}" title="в избранное">${note.is_favorited ? '&#9733;' : '&#9734;'}</button>
+          <button class="note-row-btn" data-edit-note="${note.id}" title="редактировать">&#9998;</button>
+          <button class="note-row-btn" data-discuss-note="${note.id}" data-discuss-text="${escAttr(note.content)}" title="обсудить с куратором">&#9671;</button>
+          <button class="note-row-btn" data-expand-note="${note.id}" title="показать текст">&#8943;</button>
+          <button class="note-row-btn danger" data-id="${note.id}" title="удалить">&#10005;</button>
+        </div>
+        <div class="note-row-body" hidden>
+          <div class="note-row-content" data-note-text="${escAttr(note.content)}">${esc(note.content)}</div>
+          ${tagsHtml}
+        </div>
+      </div>`;
     }
+    html += '</div>';
     $('#notesList').innerHTML = html;
   } catch (e) {
     $('#notesList').innerHTML = '<div class="empty-state"><div class="empty-icon">&#9888;</div><div class="empty-text">ошибка загрузки</div></div>';
@@ -348,19 +324,16 @@ function noteSummary(note) {
 }
 
 function toggleNoteBody(id) {
-  const card = document.querySelector(`.note-card[data-note-id="${id}"]`);
-  if (!card) return;
-  const body = card.querySelector('.note-body');
-  const btn = card.querySelector('.note-expand-btn');
+  const row = document.querySelector(`.note-row[data-note-id="${id}"]`);
+  if (!row) return;
+  const body = row.querySelector('.note-row-body');
   if (!body) return;
   if (body.hasAttribute('hidden')) {
     body.removeAttribute('hidden');
-    card.classList.add('expanded');
-    if (btn) btn.textContent = 'свернуть';
+    row.classList.add('expanded');
   } else {
     body.setAttribute('hidden', '');
-    card.classList.remove('expanded');
-    if (btn) btn.textContent = 'показать текст';
+    row.classList.remove('expanded');
   }
 }
 
@@ -396,32 +369,33 @@ async function saveNote() {
 }
 
 async function toggleNoteFavorite(id) {
-  const card = document.querySelector(`.note-card[data-note-id="${id}"]`);
-  if (!card) return;
-  const btn = card.querySelector('.note-fav');
-  const wasFav = card.classList.contains('favorited');
+  const row = document.querySelector(`.note-row[data-note-id="${id}"]`);
+  if (!row) return;
+  const btn = row.querySelector('.note-row-btn.star');
+  const wasFav = row.classList.contains('favorited');
   setStar(btn, !wasFav);
-  card.classList.toggle('favorited', !wasFav);
+  btn.classList.toggle('on', !wasFav);
+  row.classList.toggle('favorited', !wasFav);
   try {
     const r = await api('POST', '/notes/' + id + '/favorite');
-    if (r.is_favorited !== !wasFav) { setStar(btn, r.is_favorited); card.classList.toggle('favorited', r.is_favorited); }
+    if (r.is_favorited !== !wasFav) { setStar(btn, r.is_favorited); btn.classList.toggle('on', r.is_favorited); row.classList.toggle('favorited', r.is_favorited); }
     toast(r.is_favorited ? 'в избранном' : 'убрано');
   } catch (e) {
-    setStar(btn, wasFav); card.classList.toggle('favorited', wasFav);
+    setStar(btn, wasFav); btn.classList.toggle('on', wasFav); row.classList.toggle('favorited', wasFav);
     toast(apiErrorMessage(e));
   }
 }
 async function deleteNote(id) {
-  const card = document.querySelector(`.note-card[data-note-id="${id}"]`);
-  if (!card) return;
-  card.classList.add('deleting');
+  const row = document.querySelector(`.note-row[data-note-id="${id}"]`);
+  if (!row) return;
+  row.classList.add('deleting');
   try {
     await api('DELETE', '/notes/' + id);
-    card.classList.remove('deleting');
-    removeCard(card);
+    row.classList.remove('deleting');
+    removeCard(row);
     toast('удалено');
   } catch (e) {
-    card.classList.remove('deleting');
+    row.classList.remove('deleting');
     toast(apiErrorMessage(e));
   }
 }
@@ -430,11 +404,11 @@ async function deleteNote(id) {
 let editingNoteId = null;
 
 function startEditNote(id) {
-  const card = document.querySelector(`.note-card[data-note-id="${id}"]`);
-  if (!card) return;
-  const body = card.querySelector('.note-body');
+  const row = document.querySelector(`.note-row[data-note-id="${id}"]`);
+  if (!row) return;
+  const body = row.querySelector('.note-row-body');
   if (body && body.hasAttribute('hidden')) toggleNoteBody(id);
-  const contentEl = card.querySelector('.note-content');
+  const contentEl = row.querySelector('.note-row-content');
   const oldText = contentEl.dataset.noteText;
   editingNoteId = id;
 
@@ -443,7 +417,7 @@ function startEditNote(id) {
   textarea.focus();
   textarea.setSelectionRange(textarea.value.length, textarea.value.length);
 
-  const actions = card.querySelector('.note-actions');
+  const actions = row.querySelector('.note-row-actions');
   actions.innerHTML = `
     <button class="note-action-btn note-action-save" data-save-edit="${id}">&#10003; сохранить</button>
     <button class="note-action-btn note-action-cancel" data-cancel-edit="${id}">&#10005; отмена</button>
@@ -2046,9 +2020,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (cancelEdit) { cancelEditNote(parseInt(cancelEdit.dataset.cancelEdit)); return; }
     const expand = e.target.closest('[data-expand-note]');
     if (expand) { toggleNoteBody(parseInt(expand.dataset.expandNote)); return; }
-    const card = e.target.closest('.note-card');
-    if (card && card.dataset.noteId && !card.querySelector('.note-edit-input')) {
-      toggleNoteBody(parseInt(card.dataset.noteId));
+    const row = e.target.closest('.note-row');
+    if (row && row.dataset.noteId && !row.querySelector('.note-edit-input')) {
+      toggleNoteBody(parseInt(row.dataset.noteId));
       return;
     }
   });

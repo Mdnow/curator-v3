@@ -345,42 +345,19 @@
     display: none;
   }
 
-  .notes-grid {
-    grid-template-columns: 1fr;
-    gap: 8px;
+  .note-row-actions {
+    opacity: 1;
+    gap: 2px;
   }
 
-  .note-card {
-    margin: 0 16px;
-    padding: 16px;
-    border-radius: var(--radius-md);
-    border-left: 3px solid transparent;
+  .note-row-btn {
+    padding: 5px 8px;
+    font-size: var(--font-sm);
   }
 
-  .note-card:active {
-    transform: scale(0.99);
-  }
-
-  .note-content {
+  .note-row-content {
     font-size: 16px;
     line-height: 1.6;
-  }
-
-  .note-actions {
-    opacity: 1;
-    gap: 8px;
-  }
-
-  .note-action-btn {
-    padding: 8px 14px;
-    font-size: 13px;
-    border-radius: var(--radius-sm);
-    min-height: 36px;
-  }
-
-  .note-fav {
-    font-size: 20px;
-    padding: 4px 8px;
   }
 
   .note-delete {
