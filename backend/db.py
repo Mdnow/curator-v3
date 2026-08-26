@@ -178,26 +178,6 @@ async def init_db():
                     f"ALTER TABLE notes ADD COLUMN {col} {typ} DEFAULT {default}"
                 )
 
-        # Dreams table — create if not exists (new in v3)
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS dreams (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                content_encrypted TEXT NOT NULL,
-                dream_type TEXT NOT NULL DEFAULT 'night',
-                sleep_time TEXT,
-                wake_time TEXT,
-                sleep_quality INTEGER,
-                emotion_label TEXT,
-                emotion_valence REAL,
-                ai_symbols TEXT DEFAULT '[]',
-                ai_themes TEXT DEFAULT '[]',
-                ai_summary TEXT,
-                ai_question TEXT,
-                linked_note_ids TEXT DEFAULT '[]',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS goals (
                 id SERIAL PRIMARY KEY,

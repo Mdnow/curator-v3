@@ -38,7 +38,14 @@ class NoteReq(BaseModel):
     @field_validator("note_date")
     @classmethod
     def _v_date(cls, v: str) -> str:
-        return _check_len(v, "note_date", 1, 10)
+        v = _check_len(v, "note_date", 1, 10)
+        from datetime import date as _date
+
+        try:
+            _date.fromisoformat(v)
+        except ValueError:
+            raise ValueError("note_date: формат YYYY-MM-DD")
+        return v
 
 
 class ProjectReq(BaseModel):
@@ -81,7 +88,14 @@ class ImportNoteReq(BaseModel):
     @field_validator("note_date")
     @classmethod
     def _v_date(cls, v: str) -> str:
-        return _check_len(v, "note_date", 1, 10)
+        v = _check_len(v, "note_date", 1, 10)
+        from datetime import date as _date
+
+        try:
+            _date.fromisoformat(v)
+        except ValueError:
+            raise ValueError("note_date: формат YYYY-MM-DD")
+        return v
 
 
 class NoteUpdateReq(BaseModel):

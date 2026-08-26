@@ -325,6 +325,9 @@ async def _save_note(
     AI-вызов внутри запроса раздувал ответ за таймаут Render, и клиент видел
     «ошибку соединения». Фоновая задача пишет и ai_title.
     """
+    text = (text or "").strip()
+    if not text:
+        return {"text": "", "note_id": 0, "ai": None}
     today = datetime.now().date().isoformat()
     enc = encrypt(text)
     row = await db.fetchrow(

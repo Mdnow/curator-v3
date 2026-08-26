@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, BackgroundTasks
 from backend.db import get_db
 from backend.auth import get_current_user
@@ -59,6 +61,7 @@ async def create_dream(
 async def get_dreams(
     date: str = "", days: int = 30, user_id: int = Depends(get_current_user)
 ):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     async with get_db() as db:
         if date:
             rows = await db.fetch(
@@ -81,9 +84,10 @@ async def get_dreams(
                           ai_summary, ai_question, linked_note_ids,
                           created_at
                    FROM dreams WHERE user_id=$1
-                   AND created_at > NOW() - INTERVAL '{} days'
-                   ORDER BY created_at DESC""".format(days),
+                   AND created_at > $2
+                   ORDER BY created_at DESC""",
                 user_id,
+                cutoff,
             )
         dreams = []
         for r in rows:
@@ -117,16 +121,18 @@ async def get_dreams(
 
 @router.get("/timeline")
 async def dream_timeline(days: int = 30, user_id: int = Depends(get_current_user)):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     async with get_db() as db:
         rows = await db.fetch(
             """SELECT DATE(created_at) as day, COUNT(*) as cnt,
                       AVG(emotion_valence) as avg_valence,
                       AVG(sleep_quality) as avg_quality
                FROM dreams WHERE user_id=$1
-               AND created_at > NOW() - INTERVAL '{} days'
+               AND created_at > $2
                GROUP BY DATE(created_at)
-               ORDER BY day ASC""".format(days),
+               ORDER BY day ASC""",
             user_id,
+            cutoff,
         )
         return [
             {
@@ -223,13 +229,15 @@ async def dream_insight_endpoint(user_id: int = Depends(get_current_user)):
 async def dream_patterns(days: int = 30, user_id: int = Depends(get_current_user)):
     from backend.ai import daily_patterns as ai_daily_patterns
 
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     async with get_db() as db:
         note_rows = await db.fetch(
             """SELECT content_encrypted, ai_category, ai_sentiment, note_date
                FROM notes WHERE user_id=$1
-               AND created_at > NOW() - INTERVAL '{} days'
-               ORDER BY created_at DESC LIMIT 30""".format(days),
+               AND created_at > $2
+               ORDER BY created_at DESC LIMIT 30""",
             user_id,
+            cutoff,
         )
         note_parts = []
         for r in note_rows:
@@ -247,9 +255,10 @@ async def dream_patterns(days: int = 30, user_id: int = Depends(get_current_user
             """SELECT content_encrypted, dream_type, ai_symbols, emotion_valence,
                       created_at::text as day
                FROM dreams WHERE user_id=$1
-               AND created_at > NOW() - INTERVAL '{} days'
-               ORDER BY created_at DESC LIMIT 20""".format(days),
+               AND created_at > $2
+               ORDER BY created_at DESC LIMIT 20""",
             user_id,
+            cutoff,
         )
         dream_parts = []
         for r in dream_rows:
