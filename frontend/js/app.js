@@ -138,7 +138,7 @@ function initAuth() {
   } else { showAuth(); }
 }
 function showAuth() { $('#authOverlay').style.display = 'flex'; $('#appLayout').style.display = 'none'; }
-function startApp() { $('#authOverlay').style.display = 'none'; $('#appLayout').style.display = 'flex'; if (isMobile()) { $('#mobileHeader').style.display = 'flex'; $('#mobileBottomBar').style.display = 'flex'; } $('#sidebarUser').textContent = currentUser; initCalendar(); renderPageTitle(); loadProjects(); loadPageData(); }
+function startApp() { $('#authOverlay').style.display = 'none'; $('#appLayout').style.display = 'flex'; if (isMobile()) { $('#mobileHeader').style.display = 'flex'; $('#mobileBottomBar').style.display = 'flex'; } $('#sidebarUser').textContent = currentUser; initCalendar(); renderPageTitle(); loadPageData(); }
 function logout() { token = null; currentUser = null; localStorage.removeItem('curator_v3_token'); showAuth(); }
 
 async function handleAuth(mode) {
@@ -161,7 +161,6 @@ function navigateTo(page) {
     closeChatPanelUI();
   }
   currentPage = page;
-  closeProjectSilently();
   $$('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === page));
   $$('.mobile-tab').forEach(b => b.classList.toggle('active', b.dataset.page === page));
   loadPageData();
@@ -178,7 +177,6 @@ function loadPageData() {
     case 'notes': loadNotes(); break;
     case 'tasks': loadTasks(); break;
     case 'goals': loadGoals(); break;
-    case 'projects': loadProjectsPage(); break;
     case 'chat': showChat(); break;
     case 'tiktok': loadTikTok(); break;
   }
@@ -235,7 +233,7 @@ function selectDate(ds) { selectedDate = ds; renderCalendar(); renderPageTitle()
 function renderPageTitle() {
   const d = new Date(selectedDate + 'T12:00:00');
   const today = selectedDate === todayStr();
-  const titles = { notes: 'Заметки', goals: 'Цели', tasks: 'Задачи', chat: 'Куратор', projects: 'Проекты', tiktok: 'Тикток' };
+  const titles = { notes: 'Заметки', goals: 'Цели', tasks: 'Задачи', chat: 'Куратор', tiktok: 'Тикток' };
   $('#pageTitle').textContent = titles[currentPage] || '';
   if (currentPage === 'notes' || currentPage === 'tasks') {
     $('#pageSubtitle').textContent = today ? 'Сегодня' : fmtDate(selectedDate) + ', ' + RU_DAYS[d.getDay()];
@@ -249,7 +247,7 @@ function updateMobileHeader() {
   if (!isMobile()) return;
   const d = new Date(selectedDate + 'T12:00:00');
   const today = selectedDate === todayStr();
-  const titles = { notes: 'ЗАМЕТКИ', goals: 'ЦЕЛИ', tasks: 'ЗАДАЧИ', chat: 'КУРАТОР', projects: 'ПРОЕКТЫ', tiktok: 'ТИКТОК' };
+  const titles = { notes: 'ЗАМЕТКИ', goals: 'ЦЕЛИ', tasks: 'ЗАДАЧИ', chat: 'КУРАТОР', tiktok: 'ТИКТОК' };
   const el = $('#mobileHeaderTitle');
   if (el) el.textContent = titles[currentPage] || '';
   const dateEl = $('#mobileHeaderDate');
@@ -678,8 +676,7 @@ function renderGoal(goal, maxCount = 1, isArchived = false) {
   const pinBtn = isArchived ? '' : `<button class="goal-pin" data-goal-pin="${goal.id}" title="закрепить">${goal.is_pinned ? '&#9733;' : '&#9734;'}</button>`;
   const actions = isArchived
     ? `<button class="goal-activate" data-goal-activate="${goal.id}" title="вернуть в созвездие">вернуть</button>`
-    : `<button class="goal-project" data-goal-project="${goal.id}" data-goal-project-title="${escAttr(goal.title)}" title="сделать проект">в проект</button>
-       <button class="goal-chat" data-goal-chat="${goal.id}" data-goal-chat-title="${escAttr(goal.title)}" title="поговорить о направлении">поговорить</button>
+    : `<button class="goal-chat" data-goal-chat="${goal.id}" data-goal-chat-title="${escAttr(goal.title)}" title="поговорить о направлении">поговорить</button>
        <button class="goal-archive" data-goal-archive="${goal.id}" title="убрать из зеркала">в архив</button>`;
   return `<div class="goal-card ${goal.is_pinned ? 'pinned' : ''} ${isArchived ? 'archived' : ''}">
     <div class="goal-header">
@@ -785,15 +782,6 @@ async function deleteGoal(id) {
   }
 }
 
-async function goalToProject(goalId, title) {
-  try {
-    const p = await api('POST', '/projects', { name: title || 'проект по цели' });
-    projectsCache.push(p);
-    renderProjects();
-    toast('создан проект');
-    openProject(p.id);
-  } catch (e) { toast(apiErrorMessage(e)); }
-}
 
 function discussGoal(goalId, title) {
   if (!newChat()) return;
@@ -814,7 +802,6 @@ api('POST', '/ai/chat', { message: msg, goal_id: goalId, thread_id: null }, { ti
     if (result.saved && result.saved.text) {
       messagesEl.innerHTML += chatActionHtml('куратор сохранил это в заметки', 'undo-note', result.saved.note_id);
     }
-    appendAssignSummary(messagesEl, result);
     messagesEl.innerHTML += noteRefsBlockHtml(parsed.text, result.note_refs, 'куратор ссылается на заметки — нажми, чтобы прочитать полностью');
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }).catch((err) => {
@@ -824,299 +811,9 @@ api('POST', '/ai/chat', { message: msg, goal_id: goalId, thread_id: null }, { ti
   });
 }
 
-// ═══ Projects ═══
-async function loadProjects() {
-  try {
-    projectsCache = await api('GET', '/projects');
-  } catch (e) {
-    projectsCache = [];
-  }
-  renderProjects();
-}
-
-function renderProjects() {
-  const html = projectsCache.map(p =>
-    `<div class="project-item ${currentProjectId === p.id ? 'active' : ''}" data-project-id="${p.id}" title="${escAttr(p.name)}">
-      <span class="project-item-name">${esc(p.name)}</span>
-      <span class="project-item-meta">${(p.note_count || 0) + (p.msg_count || 0)}</span>
-    </div>`
-  ).join('');
-  const list = $('#projectsList');
-  const listM = $('#projectsListMobile');
-  const pageList = $('#projectsPageList');
-  const emptyHtml = '<div class="project-item-meta" style="padding:6px 8px">нет проектов</div>';
-  if (list) list.innerHTML = html || emptyHtml;
-  if (listM) listM.innerHTML = html || emptyHtml;
-  if (pageList) pageList.innerHTML = html || '';
-  const pageEmpty = $('#projectsPageEmpty');
-  if (pageEmpty) pageEmpty.style.display = html ? 'none' : 'block';
-}
-
-function loadProjectsPage() {
-  hideAllSections();
-  $('#projectsPageSection').style.display = 'block';
-  loadProjects();
-}
-
-function toggleProjectsPageAddForm() {
-  const form = $('#projectsPageAddForm');
-  form.style.display = form.style.display === 'none' ? 'block' : 'none';
-  if (form.style.display === 'block') $('#projectsPageAddInput').focus();
-}
-
-async function createProjectFromPage() {
-  const input = $('#projectsPageAddInput');
-  const name = input.value.trim();
-  input.value = '';
-  $('#projectsPageAddForm').style.display = 'none';
-  if (!name) return;
-  try {
-    const p = await api('POST', '/projects', { name });
-    projectsCache.push(p);
-    renderProjects();
-    toast('проект создан');
-    openProject(p.id);
-  } catch (e) { toast(apiErrorMessage(e)); }
-}
-
-function closeProjectSilently() {
-  currentProjectId = null;
-  $('#projectSection').classList.remove('active');
-  renderProjects();
-  if (isMobile()) {
-    $('#mobileHeader').style.display = 'flex';
-    $('#mobileBottomBar').style.display = 'flex';
-  }
-}
-
-function openProject(id) {
-  currentProjectId = id;
-  hideAllSections();
-  $('#projectSection').classList.add('active');
-  switchProjectTab('chat');
-  renderProjects();
-  if (isMobile()) {
-    $('#mobileHeader').style.display = 'none';
-    $('#mobileBottomBar').style.display = 'none';
-  }
-  loadProjectDetail();
-}
-
-function switchProjectTab(tab) {
-  $$('.project-tab').forEach(b => b.classList.toggle('active', b.dataset.projectTab === tab));
-  const mat = $('#projectMaterialsPane');
-  const chat = $('#projectChatPane');
-  if (mat) mat.classList.toggle('pane-active', tab === 'materials');
-  if (chat) chat.classList.toggle('pane-active', tab === 'chat');
-}
-
-function closeProject() {
-  closeProjectSilently();
-  navigateTo(lastCenterPage);
-}
-
-async function loadProjectDetail() {
-  if (!currentProjectId) return;
-  const p = await api('GET', '/projects/' + currentProjectId).catch(() => null);
-  if (!p) { toast('проект не найден'); closeProject(); return; }
-  $('#projectTitleInput').value = p.name;
-  $('#projectTitleInput').disabled = true;
-  renderProjectNotes(p.notes);
-  renderProjectChat(p.messages);
-}
-
-function renderProjectNotes(notes) {
-  const list = $('#projectNotesList');
-  const empty = $('#projectNotesEmpty');
-  const countEl = $('#projectMaterialsCount');
-  const badge = $('#projectTabCount');
-  if (badge) {
-    badge.textContent = notes.length;
-    badge.classList.toggle('show', notes.length > 0);
-  }
-  if (countEl) countEl.textContent = notes.length ? notes.length + ' записей' : '';
-  if (!notes.length) {
-    list.innerHTML = '';
-    empty.style.display = 'block';
-    return;
-  }
-  empty.style.display = 'none';
-  list.innerHTML = notes.map(n => {
-    const title = noteTitle(n);
-    const summary = (n.ai_summary || n.content || '').slice(0, 200);
-    return `<div class="project-note" data-pnote-id="${n.id}">
-      <div class="project-note-title">${esc(title)}</div>
-      <div class="project-note-summary">${esc(summary)}</div>
-      <div class="project-note-meta">
-        <span class="project-note-date">${esc(fmtDate(n.note_date))}</span>
-        <div class="project-note-actions">
-          <button class="project-note-btn" data-pnote-discuss="${n.id}" data-pnote-text="${escAttr(n.content)}" title="обсудить с куратором">обсудить</button>
-          <button class="project-note-btn" data-pnote-unassign="${n.id}" title="убрать из проекта">убрать</button>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-async function reloadProjectNotes() {
-  if (!currentProjectId) return;
-  const p = await api('GET', '/projects/' + currentProjectId).catch(() => null);
-  if (p) renderProjectNotes(p.notes);
-}
-
-async function saveProjectNote() {
-  const input = $('#projectNoteInput');
-  const content = input.value.trim();
-  if (!content || !currentProjectId) return;
-  try {
-    await api('POST', '/notes', { content, note_date: todayStr(), tags: [], mood: '', project_id: currentProjectId });
-    input.value = '';
-    toast('в материалы проекта');
-    await reloadProjectNotes();
-    loadProjects();
-  } catch (e) { toast(apiErrorMessage(e)); }
-}
-
-function unassignProjectNote(noteId) {
-  api('PUT', '/notes/' + noteId, { project_id: 0 }).then(() => {
-    toast('убрано из проекта');
-    reloadProjectNotes();
-    loadProjects();
-  }).catch(err => toast(apiErrorMessage(err)));
-}
-
-function renderProjectChat(messages) {
-  const el = $('#projectChatMessages');
-  if (!messages.length) {
-    el.innerHTML = '<div class="chat-msg ai">диалог проекта пуст. спроси меня про материалы или расскажи, что хочешь проработать.</div>';
-    return;
-  }
-  el.innerHTML = messages.map(m => chatMsgHtml(m.role === 'assistant' ? 'ai' : 'user', m.content)).join('');
-  preloadInlineNoteIds(messages.filter(m => m.role === 'assistant').map(m => m.content).join(' '), el);
-  el.scrollTop = el.scrollHeight;
-}
-
-async function sendProjectChat() {
-  const input = $('#projectChatInput');
-  const msg = input.value.trim();
-  if (!msg || !currentProjectId) return;
-  if ($('#projectChatLoading')) return;
-  const messagesEl = $('#projectChatMessages');
-  messagesEl.innerHTML += `<div class="chat-msg user">${esc(msg)}</div>`;
-  input.value = '';
-  messagesEl.innerHTML += `<div class="chat-msg ai" id="projectChatLoading"><div class="ai-dot"></div> думаю...</div>`;
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-  try {
-    const result = await api('POST', '/ai/chat', { message: msg, project_id: currentProjectId }, { timeoutMs: CHAT_TIMEOUT_MS });
-    const loadingEl = $('#projectChatLoading'); if (loadingEl) loadingEl.remove();
-    const parsed = parseChatReply(result.reply);
-    cacheNoteRefs(result.note_refs);
-    messagesEl.innerHTML += chatMsgHtml('ai', parsed.text);
-    preloadInlineNoteIds(parsed.text, messagesEl);
-    if (result.saved && result.saved.text) {
-      messagesEl.innerHTML += chatActionHtml('куратор сохранил это в материалы проекта', 'undo-note', result.saved.note_id);
-    }
-    if (result.mem_copied) {
-      messagesEl.innerHTML += chatActionHtml('куратор скопировал это из Mem AI в материалы проекта', 'undo-note', result.mem_copied.note_id);
-}
-    appendAssignSummary(messagesEl, result);
-    messagesEl.innerHTML += noteRefsBlockHtml(parsed.text, result.note_refs, 'куратор ссылается на материалы проекта — нажми, чтобы прочитать');
-    loadProjects();
-    await reloadProjectNotes();
-  } catch (e) {
-    const loadingEl = $('#projectChatLoading'); if (loadingEl) loadingEl.remove();
-    messagesEl.innerHTML += `<div class="chat-msg ai">${esc(apiErrorMessage(e))}</div>`;
-  }
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-}
-
-function startRenameProject() {
-  const input = $('#projectTitleInput');
-  input.disabled = false;
-  input.focus();
-  input.select();
-}
-
-async function saveProjectName() {
-  const input = $('#projectTitleInput');
-  if (!currentProjectId) return;
-  const name = input.value.trim();
-  if (!name) { input.disabled = true; return; }
-  input.disabled = true;
-  const prev = projectsCache.find(p => p.id === currentProjectId);
-  if (prev && name !== prev.name) {
-    try {
-      await api('PUT', '/projects/' + currentProjectId, { name });
-      toast('переименовано');
-    } catch (e) { toast(apiErrorMessage(e)); }
-  }
-  loadProjects();
-}
-
-async function deleteProject() {
-  if (!currentProjectId) return;
-  const name = $('#projectTitleInput').value.trim();
-  if (!confirm('удалить проект «' + name + '»? заметки останутся, диалог проекта удалится')) return;
-  try {
-    await api('DELETE', '/projects/' + currentProjectId);
-    toast('проект удалён');
-    closeProject();
-    loadProjects();
-  } catch (e) { toast(apiErrorMessage(e)); }
-}
-
-// ═══ Assign note to project ═══
-let assignNoteId = null;
-
-function closeAssignModal() {
-  assignNoteId = null;
-  $('#assignModal').style.display = 'none';
-}
-
-async function openAssignModal(noteId, curProjectId) {
-  assignNoteId = noteId;
-  const modal = $('#assignModal');
-  const list = $('#assignModalList');
-  const empty = $('#assignModalEmpty');
-  try {
-    if (!projectsCache.length) projectsCache = await api('GET', '/projects');
-  } catch (e) { projectsCache = []; }
-  if (!projectsCache.length && !curProjectId) {
-    list.innerHTML = '';
-    empty.style.display = 'block';
-  } else {
-    empty.style.display = 'none';
-    const unassignHtml = curProjectId
-      ? `<button class="assign-project-btn active" data-assign-project="0">
-          <span class="assign-name">убрать из проекта</span>
-          <span class="assign-count"></span>
-        </button>`
-      : '';
-    list.innerHTML = unassignHtml + projectsCache.map(p =>
-      `<button class="assign-project-btn ${curProjectId === p.id ? 'active' : ''}" data-assign-project="${p.id}">
-        <span class="assign-name">${esc(p.name)}</span>
-        <span class="assign-count">${(p.note_count || 0)} записей</span>
-      </button>`
-    ).join('');
-  }
-  modal.style.display = 'flex';
-}
-
-async function assignNoteToProject(projectId) {
-  if (!assignNoteId) return;
-  try {
-    await api('PUT', '/notes/' + assignNoteId, { project_id: projectId });
-    toast('заметка в проекте');
-  } catch (e) { toast(apiErrorMessage(e)); }
-  closeAssignModal();
-  loadNotes();
-  loadProjects();
-}
 
 // ═══ Chat ═══
 let currentThreadId = null;
-let currentProjectId = null;
-let projectsCache = [];
 let pendingChatFile = null;
 let pendingChatFileName = '';
 
@@ -1387,23 +1084,6 @@ function openNoteFromRef(id) {
   else loadNotePreview(id).then(open);
 }
 
-// Сводка распределения заметок по проектам (ADR-0017): блок «куратор разложила».
-function appendAssignSummary(messagesEl, result) {
-  if (!result.assigned || !result.assigned.assigned || !result.assigned.assigned.length) return;
-  const { assigned, created_projects } = result.assigned;
-  const byProject = {};
-  assigned.forEach(a => { (byProject[a.project] = byProject[a.project] || []).push(a.note_id); });
-  const lines = Object.entries(byProject).map(([proj, ids]) => `${ids.length} → «${proj}»`).join(', ');
-  const undoData = JSON.stringify(assigned.map(a => ({ note_id: a.note_id, prev_project_id: a.prev_project_id || 0 })));
-  let html = `<div class="chat-auto-saved">куратор разложила по проектам: ${esc(lines)}`;
-  if (created_projects && created_projects.length) {
-    html += ` · созданы проекты: ${esc(created_projects.join(', '))}`;
-  }
-  html += ` <button class="chat-undo-btn" data-undo-assign="${escAttr(undoData)}">отменить</button></div>`;
-  messagesEl.innerHTML += html;
-  loadProjects().catch(() => {});
-}
-
 async function copyChatText(text) {
   try {
     await navigator.clipboard.writeText(text);
@@ -1439,18 +1119,6 @@ async function undoChatAction(btn) {
       toast('заметка удалена');
     } catch (e) { toast(apiErrorMessage(e)); }
     return;
-  }
-  if (btn.dataset.undoAssign) {
-    let entries;
-    try { entries = JSON.parse(btn.dataset.undoAssign); } catch (e) { return; }
-    try {
-      for (const en of entries) {
-        await api('PUT', '/notes/' + en.note_id, { project_id: en.prev_project_id || 0 });
-      }
-      if (block) block.remove();
-      toast('раскладка отменена');
-      loadProjects().catch(() => {});
-    } catch (e) { toast(apiErrorMessage(e)); }
   }
 }
 
@@ -1530,7 +1198,6 @@ async function sendChat() {
     if (result.mem_copied) {
       messagesEl.innerHTML += chatActionHtml('куратор скопировал это из Mem AI в заметки', 'undo-note', result.mem_copied.note_id);
     }
-    appendAssignSummary(messagesEl, result);
     messagesEl.innerHTML += noteRefsBlockHtml(parsed.text, result.note_refs, 'куратор ссылается на заметки — нажми, чтобы прочитать полностью');
   } catch (e) {
     const loadingEl = $('#chatLoading'); if (loadingEl) loadingEl.remove();
@@ -1669,7 +1336,7 @@ async function searchArchive() {
     results.innerHTML = data.map(r => {
       const hl = r.snippet.replace(new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi'), '<mark>$1</mark>');
       const roleLabel = r.role === 'user' ? 'ты' : 'куратор';
-      const threadAttr = r.thread_id ? ` data-result-thread="${r.thread_id}"` : ' data-result-project="1"';
+      const threadAttr = r.thread_id ? ` data-result-thread="${r.thread_id}"` : '';
       return `<div class="archive-result"${threadAttr}><div class="archive-result-snippet">${roleLabel}: ${hl}</div><div class="archive-result-meta">${r.time ? formatArchiveDate(r.time) : ''}</div></div>`;
     }).join('');
   } catch (e) { results.innerHTML = '<div class="archive-empty">ошибка поиска</div>'; }
@@ -1782,11 +1449,9 @@ function hideAllSections() {
   $('#notesSection').style.display = 'none';
   $('#tasksSection').style.display = 'none';
   $('#goalsSection').style.display = 'none';
-  $('#projectsPageSection').style.display = 'none';
   $('#chatSection').classList.remove('active');
   $('#tiktokSection').style.display = 'none';
   $('#archivePanel').style.display = 'none';
-  $('#projectSection').classList.remove('active');
 }
 
 function autoResize() { const i = $('#noteInput'); i.style.height = 'auto'; i.style.height = Math.min(i.scrollHeight, 200) + 'px'; }
@@ -2006,8 +1671,6 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#notesSection').addEventListener('click', e => {
     const fav = e.target.closest('[data-fav-note]');
     if (fav) { toggleNoteFavorite(parseInt(fav.dataset.favNote)); return; }
-    const assign = e.target.closest('[data-assign-note]');
-    if (assign) { openAssignModal(parseInt(assign.dataset.assignNote), parseInt(assign.dataset.assignCur || 0)); return; }
     const del = e.target.closest('[data-id]');
     if (del) { deleteNote(parseInt(del.dataset.id)); return; }
     const edit = e.target.closest('[data-edit-note]');
@@ -2054,8 +1717,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (arc) { archiveGoal(parseInt(arc.dataset.goalArchive)); return; }
     const act = e.target.closest('[data-goal-activate]');
     if (act) { activateGoal(parseInt(act.dataset.goalActivate)); return; }
-    const proj = e.target.closest('[data-goal-project]');
-    if (proj) { goalToProject(parseInt(proj.dataset.goalProject), proj.dataset.goalProjectTitle); return; }
     const chatBtn = e.target.closest('[data-goal-chat]');
     if (chatBtn) { discussGoal(parseInt(chatBtn.dataset.goalChat), chatBtn.dataset.goalChatTitle); return; }
     const del = e.target.closest('[data-goal-delete]');
@@ -2166,61 +1827,8 @@ $('#archiveList').addEventListener('click', e => {
   // Selection toolbar
   initSelectionToolbar();
 
-  // Projects page (раздел «Проекты»)
-  const pageAddBtn = $('#projectsPageAddBtn');
-  if (pageAddBtn) pageAddBtn.addEventListener('click', toggleProjectsPageAddForm);
-  const pageAddInput = $('#projectsPageAddInput');
-  if (pageAddInput) pageAddInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); createProjectFromPage(); }
-    if (e.key === 'Escape') { $('#projectsPageAddForm').style.display = 'none'; }
-  });
-  const pageAddSubmit = $('#projectsPageAddSubmit');
-  if (pageAddSubmit) pageAddSubmit.addEventListener('click', createProjectFromPage);
-  const pageList = $('#projectsPageList');
-  if (pageList) pageList.addEventListener('click', e => { const it = e.target.closest('[data-project-id]'); if (it) openProject(parseInt(it.dataset.projectId)); });
-
   // Drawer кнопки навигации
   $$('.drawer-btn[data-page]').forEach(btn => btn.addEventListener('click', () => navigateTo(btn.dataset.page)));
-  const projectsListMobile = $('#projectsListMobile');
-  if (projectsListMobile) projectsListMobile.addEventListener('click', e => { const it = e.target.closest('[data-project-id]'); if (it) { closeDrawer(); openProject(parseInt(it.dataset.projectId)); } });
-
-  // Project screen
-  $('#projectBackBtn').addEventListener('click', closeProject);
-  $('#projectRenameBtn').addEventListener('click', startRenameProject);
-  $('#projectTitleInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') saveProjectName();
-    if (e.key === 'Escape') { $('#projectTitleInput').disabled = true; loadProjects(); }
-  });
-  $('#projectTitleInput').addEventListener('blur', saveProjectName);
-  $('#projectDeleteBtn').addEventListener('click', deleteProject);
-  $('#projectNoteSave').addEventListener('click', saveProjectNote);
-  $('#projectNoteInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveProjectNote(); } });
-  $('#projectChatSend').addEventListener('click', sendProjectChat);
-  $('#projectChatInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendProjectChat(); } });
-  $$('.project-tab').forEach(b => b.addEventListener('click', () => switchProjectTab(b.dataset.projectTab)));
-  $('#projectNotesList').addEventListener('click', e => {
-    const unassign = e.target.closest('[data-pnote-unassign]');
-    if (unassign) { unassignProjectNote(parseInt(unassign.dataset.pnoteUnassign)); return; }
-    const discuss = e.target.closest('[data-pnote-discuss]');
-    if (discuss) {
-      closeProject();
-      setTimeout(() => discussWithCurator(discuss.dataset.pnoteText || ''), 50);
-    }
-  });
-  $('#projectChatMessages').addEventListener('click', e => {
-    const undo = e.target.closest('.chat-undo-btn');
-    if (undo) { undoChatAction(undo); return; }
-    const ref = e.target.closest('.chat-note-ref');
-    if (ref) openNoteModal({ id: ref.dataset.noteId, content: ref.dataset.noteContent, date: ref.dataset.noteDate, title: ref.dataset.noteTitle });
-  });
-
-  // Assign note to project
-  $('#assignModalCancel').addEventListener('click', closeAssignModal);
-  $('#assignModal').addEventListener('click', e => { if (e.target === $('#assignModal')) closeAssignModal(); });
-  $('#assignModalList').addEventListener('click', e => {
-    const btn = e.target.closest('[data-assign-project]');
-    if (btn) assignNoteToProject(parseInt(btn.dataset.assignProject));
-  });
 
   // Keyboard shortcuts
   document.addEventListener('keydown', e => {

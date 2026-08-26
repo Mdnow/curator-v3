@@ -128,7 +128,7 @@ async def init_db():
             )
         """)
         # Ветки чата (ADR-0014): диалог = тема с названием, сообщения привязаны
-        # через thread_id. Проектные диалоги остаются в своём режиме (project_id).
+        # через thread_id.
         await db.execute("""
             CREATE TABLE IF NOT EXISTS chat_threads (
                 id SERIAL PRIMARY KEY,
@@ -251,40 +251,7 @@ async def init_db():
             "CREATE INDEX IF NOT EXISTS idx_chat_user ON chat_history(user_id, created_at)"
         )
 
-        # Projects — контейнеры: имя + свой диалог + привязанные заметки (материалы)
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS projects (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                name TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        await db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id, updated_at)"
-        )
-        # Связь заметок с проектом (материалы). Удаление проекта не удаляет заметки —
-        # только снимает привязку (SET NULL).
-        await db.execute(
-            "ALTER TABLE notes ADD COLUMN IF NOT EXISTS project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL"
-        )
-        # Диалог проекта живёт в chat_history, project_id — фильтр диалога.
-        # При удалении проекта его диалог удаляется (CASCADE).
-        await db.execute(
-            "ALTER TABLE chat_history ADD COLUMN IF NOT EXISTS project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE"
-        )
-        await db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_notes_project ON notes(user_id, project_id)"
-        )
-        await db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_chat_project ON chat_history(user_id, project_id)"
-        )
-
         # ── Миграция (ADR-0014): старые сессии → ветки chat_threads ──
-        # Сессии-по-времени превращаются в тематические ветки: одна группа
-        # (user_id, session_id) → одна ветка, заголовок из первого сообщения.
-        # Проектные диалоги (project_id) не трогаем — они остаются в своём режиме.
         migrate_groups = await db.fetch(
             """SELECT user_id, session_id, MIN(created_at) as started
                FROM chat_history
@@ -314,11 +281,11 @@ async def init_db():
                 g["user_id"],
                 g["session_id"],
             )
-        # Старые «несохранённые» сообщения без сессии и без проекта — в одну ветку.
+        # Старые «несохранённые» сообщения без сессии — в одну ветку.
         unassigned_users = await db.fetch(
             """SELECT DISTINCT user_id, MIN(created_at) as started
                FROM chat_history
-               WHERE session_id IS NULL AND thread_id IS NULL AND project_id IS NULL
+               WHERE session_id IS NULL AND thread_id IS NULL
                GROUP BY user_id"""
         )
         for u in unassigned_users:
@@ -330,8 +297,7 @@ async def init_db():
             )
             await db.execute(
                 """UPDATE chat_history SET thread_id=$1
-                   WHERE user_id=$2 AND session_id IS NULL AND thread_id IS NULL
-                     AND project_id IS NULL""",
+                   WHERE user_id=$2 AND session_id IS NULL AND thread_id IS NULL""",
                 thr["id"],
                 u["user_id"],
             )

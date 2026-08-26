@@ -28,7 +28,6 @@ class NoteReq(BaseModel):
     note_date: str
     tags: list[str] = []
     mood: Optional[str] = None
-    project_id: Optional[int] = None
 
     @field_validator("content")
     @classmethod
@@ -46,26 +45,6 @@ class NoteReq(BaseModel):
         except ValueError:
             raise ValueError("note_date: формат YYYY-MM-DD")
         return v
-
-
-class ProjectReq(BaseModel):
-    name: str
-
-    @field_validator("name")
-    @classmethod
-    def _v_name(cls, v: str) -> str:
-        return _check_len(v, "name", 1, 200)
-
-
-class ProjectUpdateReq(BaseModel):
-    name: Optional[str] = None
-
-    @field_validator("name")
-    @classmethod
-    def _v_name(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return v
-        return _check_len(v, "name", 1, 200)
 
 
 class ImportNoteReq(BaseModel):
@@ -102,7 +81,6 @@ class NoteUpdateReq(BaseModel):
     content: Optional[str] = None
     tags: Optional[list[str]] = None
     mood: Optional[str] = None
-    project_id: Optional[int] = None
 
     @field_validator("content")
     @classmethod
@@ -172,7 +150,6 @@ class DreamReq(BaseModel):
 class ChatReq(BaseModel):
     message: str
     session_id: Optional[int] = None
-    project_id: Optional[int] = None
     goal_id: Optional[int] = None
     thread_id: Optional[int] = None
 

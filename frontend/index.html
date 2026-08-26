@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/css/chat.css?v=13">
   <link rel="stylesheet" href="/css/patterns.css?v=7">
   <link rel="stylesheet" href="/css/tiktok.css?v=1">
-  <link rel="stylesheet" href="/css/projects.css?v=5">
+
   <link rel="stylesheet" href="/css/animations.css?v=8">
   <link rel="stylesheet" href="/css/mobile.css?v=14">
 </head>
@@ -75,10 +75,6 @@
       <span class="mobile-tab-icon">✎</span>
       <span>Заметки</span>
     </button>
-    <button class="mobile-tab" data-page="projects">
-      <span class="mobile-tab-icon">&#9635;</span>
-      <span>Проекты</span>
-    </button>
     <button class="mobile-tab" data-page="chat">
       <span class="mobile-tab-icon">◇</span>
       <span>Куратор</span>
@@ -121,7 +117,6 @@
 
 <nav class="nav-section">
         <button class="nav-btn active" data-page="notes">Заметки</button>
-        <button class="nav-btn" data-page="projects">Проекты</button>
         <button class="nav-btn" data-page="chat">Куратор</button>
         <button class="nav-btn" data-page="tiktok">Тикток</button>
       </nav>
@@ -222,25 +217,6 @@
         </div>
       </div>
 
-      <!-- Projects -->
-      <div id="projectsPageSection" style="display:none">
-        <div class="projects-page">
-          <div class="projects-page-toolbar">
-            <span class="projects-page-title">проекты</span>
-            <button class="btn btn-small" id="projectsPageAddBtn">+ новый</button>
-          </div>
-          <div class="projects-add-form" id="projectsPageAddForm" style="display:none">
-            <input type="text" id="projectsPageAddInput" placeholder="название проекта" autocomplete="off" maxlength="200">
-            <button class="btn btn-small" id="projectsPageAddSubmit">создать</button>
-          </div>
-          <div class="projects-page-list" id="projectsPageList"></div>
-          <div class="projects-page-empty" id="projectsPageEmpty" style="display:none">
-            <div class="empty-icon">&#9671;</div>
-            <div class="empty-text">проектов пока нет — создай первый</div>
-          </div>
-        </div>
-      </div>
-
       <!-- TikTok -->
       <div id="tiktokSection" style="display:none">
         <div class="tiktok-input-wrapper">
@@ -258,50 +234,6 @@
         <div class="tiktok-empty" id="tiktokEmpty" style="display:none">
           <div class="empty-icon">&#9654;</div>
           <div class="empty-text">в этот день тиктоков нет — кидай ссылку</div>
-        </div>
-      </div>
-
-      <!-- Project -->
-      <div class="project-section" id="projectSection">
-        <div class="project-topbar">
-          <button class="btn btn-icon project-back-btn" id="projectBackBtn" title="назад">&#8592;</button>
-          <input type="text" class="project-title-input" id="projectTitleInput" maxlength="200" disabled>
-          <button class="btn btn-icon" id="projectRenameBtn" title="переименовать">&#9998;</button>
-          <button class="btn btn-icon project-delete-btn" id="projectDeleteBtn" title="удалить проект">&#10005;</button>
-        </div>
-
-        <div class="project-tabs" id="projectTabs">
-          <button class="project-tab active" data-project-tab="chat">диалог</button>
-          <button class="project-tab" data-project-tab="materials">материалы <span class="project-tab-badge" id="projectTabCount"></span></button>
-        </div>
-
-        <div class="project-body">
-          <div class="project-materials" id="projectMaterialsPane">
-            <div class="project-materials-head">
-              <span class="project-materials-label">материалы</span>
-              <span class="project-materials-count" id="projectMaterialsCount"></span>
-            </div>
-            <div class="project-note-input-row">
-              <textarea class="note-input" id="projectNoteInput" placeholder="новая заметка в проект..." rows="1"></textarea>
-              <button class="btn btn-small" id="projectNoteSave">В ПРОЕКТ</button>
-            </div>
-            <div class="project-notes" id="projectNotesList"></div>
-            <div class="project-notes-empty" id="projectNotesEmpty" style="display:none">
-              <div class="empty-icon">&#9671;</div>
-              <div class="empty-text">материалов пока нет — добавь заметку здесь или назначь существующую из «Заметок»</div>
-            </div>
-          </div>
-
-          <div class="project-chat" id="projectChatPane">
-            <div class="project-chat-title">диалог проекта</div>
-            <div class="chat-messages project-chat-messages" id="projectChatMessages">
-              <div class="chat-msg ai">диалог проекта пуст. спроси меня про материалы или расскажи, что хочешь проработать.</div>
-            </div>
-            <div class="chat-input-row">
-              <input type="text" class="chat-input" id="projectChatInput" placeholder="спроси куратора про материалы...">
-              <button class="btn" id="projectChatSend">&#10148;</button>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -381,17 +313,6 @@
       <div class="note-modal-footer">
         <button class="btn btn-primary" id="noteModalOpenBtn">открыть в заметках</button>
       </div>
-    </div>
-  </div>
-
-  <div class="assign-modal" id="assignModal" style="display:none">
-    <div class="assign-modal-card">
-      <div class="assign-modal-title">в какой проект?</div>
-      <div class="assign-modal-list" id="assignModalList"></div>
-      <div class="assign-modal-empty" id="assignModalEmpty" style="display:none">
-        <span class="empty-text">проектов нет — создай в сайдбаре</span>
-      </div>
-      <button class="assign-modal-cancel" id="assignModalCancel">отмена</button>
     </div>
   </div>
 
