@@ -29,5 +29,3 @@ ENCRYPTION_KEY = os.getenv("CURATOR_ENCRYPTION_KEY") or secrets.token_hex(32)
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 TMP_DIR = os.getenv("TMP_DIR", "") or os.path.join(tempfile.gettempdir(), "tiktok")
-
-MEM_API_KEY = os.getenv("MEM_API_KEY", "")
