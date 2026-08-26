@@ -828,6 +828,11 @@ async def clear_chat(user_id: int = Depends(get_current_user)):
 async def delete_thread(thread_id: int, user_id: int = Depends(get_current_user)):
     async with get_db() as db:
         await db.execute(
+            "DELETE FROM chat_history WHERE user_id=$1 AND thread_id=$2",
+            user_id,
+            thread_id,
+        )
+        await db.execute(
             "DELETE FROM chat_threads WHERE id=$1 AND user_id=$2",
             thread_id,
             user_id,
