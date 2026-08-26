@@ -456,18 +456,53 @@ async function dailySummary() {
   el.innerHTML = '<div class="patterns-loading">думаю над итогами дня...</div>';
 
   try {
-    const [notes, patterns] = await Promise.all([
+    const [notes, tasks, patterns] = await Promise.all([
       api('GET', '/notes?date=' + selectedDate),
+      api('GET', '/tasks?date=' + selectedDate),
       api('GET', '/insights/daily'),
     ]);
 
     let summaryHtml = '<div class="summary-content">';
 
-    if (notes.length > 0) {
+    const totalTasks = tasks.length;
+    const doneTasks = tasks.filter(t => t.completed).length;
+
+    if (totalTasks > 0) {
       summaryHtml += `<div class="summary-section">
-        <div class="summary-label">заметок за день</div>
-        <div class="summary-big">${notes.length}</div>
+        <div class="summary-label">задач</div>
+        <div class="summary-big">${doneTasks} из ${totalTasks}</div>
       </div>`;
+    }
+
+    if (notes.length > 0) {
+      const timeGroups = { 'утро': [], 'день': [], 'вечер': [] };
+      for (const n of notes) {
+        const h = new Date(parseAsUtc(n.created_at)).getUTCHours() + 3;
+        const hour = h >= 24 ? h - 24 : h;
+        if (hour >= 6 && hour < 12) timeGroups['утро'].push(n);
+        else if (hour >= 12 && hour < 18) timeGroups['день'].push(n);
+        else timeGroups['вечер'].push(n);
+      }
+
+      const groupLabels = { 'утро': '6:00 - 12:00', 'день': '12:00 - 18:00', 'вечер': '18:00 - 0:00' };
+      let timelineHtml = '';
+      for (const [label, group] of Object.entries(timeGroups)) {
+        if (group.length === 0) continue;
+        const tags = group.map(n => {
+          const cat = n.ai_category || '';
+          return `<span class="summary-timeline-tag">${cat ? esc(cat) + ': ' : ''}${esc((n.ai_title || n.content || '').slice(0, 40))}</span>`;
+        }).join('');
+        timelineHtml += `<div class="summary-time-group">
+          <div class="summary-time-label">${label} <span class="summary-time-range">${groupLabels[label]} · ${group.length}</span></div>
+          <div class="summary-tags">${tags}</div>
+        </div>`;
+      }
+      if (timelineHtml) {
+        summaryHtml += `<div class="summary-section">
+          <div class="summary-label">заметки по времени</div>
+          ${timelineHtml}
+        </div>`;
+      }
 
       const categories = {};
       for (const n of notes) {
@@ -495,6 +530,20 @@ async function dailySummary() {
         </div>`;
       }
     }
+
+    const activityScore = notes.length + doneTasks;
+    let confirmText = '';
+    if (activityScore === 0) {
+      confirmText = 'этот день был тихим — и это нормально';
+    } else if (activityScore <= 3) {
+      confirmText = 'день был рабочим — было сделано то, что нужно';
+    } else {
+      confirmText = 'день был насыщенным — многое из задуманного состоялось';
+    }
+    summaryHtml += `<div class="summary-section summary-confirm">
+      <div class="summary-confirm-text">${confirmText}</div>
+      <div class="summary-confirm-detail">${notes.length > 0 ? notes.length + ' ' + (notes.length === 1 ? 'заметка' : notes.length < 5 ? 'заметки' : 'заметок') : ''}${notes.length > 0 && doneTasks > 0 ? ', ' : ''}${doneTasks > 0 ? doneTasks + ' ' + (doneTasks === 1 ? 'задача' : doneTasks < 5 ? 'задачи' : 'задач') + ' выполнено' : ''}</div>
+    </div>`;
 
     if (patterns.key_insight || patterns.emotional_arc) {
       summaryHtml += `<div class="summary-section summary-insight">
