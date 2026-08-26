@@ -456,11 +456,12 @@ async function dailySummary() {
   el.innerHTML = '<div class="patterns-loading">думаю над итогами дня...</div>';
 
   try {
-    const [notes, tasks, patterns] = await Promise.all([
+    const [notes, patterns] = await Promise.all([
       api('GET', '/notes?date=' + selectedDate),
-      api('GET', '/tasks?date=' + selectedDate),
       api('GET', '/insights/daily'),
     ]);
+    let tasks = [];
+    try { tasks = await api('GET', '/tasks?date=' + selectedDate); } catch (_) {}
 
     let summaryHtml = '<div class="summary-content">';
 
