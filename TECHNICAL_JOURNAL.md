@@ -1412,3 +1412,26 @@ ALTER TABLE chat_history ADD COLUMN IF NOT EXISTS thread_id INTEGER REFERENCES c
 
 ### 43.5. Замечания
 - 68с всё ещё долго: это плата за free-модели и большой пул. Если понадобится быстрее — ограничивать пул ещё, поднимать `max_tokens` не выше, или переводить чат на платную модель с разумным лимитом.
+
+## 44. 27.08.2026 — Десктоп: клики по absolute-меню промахивались из-за transform-анимации на родителе
+
+### 44.1. Симптом
+Меню действий заметки (⋯ → Копировать / В избранное / Редактировать / Удалить, absolute `.note-row-menu` внутри grid-строки) на десктопе «не нажималось»: пункты визуально нарисованы, но мышь попадает мимо. На мобилке — не проявлялось.
+
+### 44.2. Причина
+`.note-row` имел `animation: fadeUp 0.2s ease both`. `fadeUp` оперирует `transform: translateY(...)`; из-за `animation-fill-mode: both` на элементе **постоянно** остаётся `transform: translateY(0)` — это не `none`, а активный transform. Для `position: absolute`-потомка (меню) такой non-none transform на предке рассинхронизирует вычисление позиций при hit-testing: меню рисуется в «трансформированном» месте, а клики бьются в «layout-позицию» — попадают в соседний `.note-row-title` вместо пункта меню. `getBoundingClientRect` кнопки показывал верный прямоугольник, но `elementFromPoint(cls) → note-row-title` (расхождение рендера и попадания).
+
+Точное воспроизведение: headless-Chrome `--headless=new` + CDP, реальные `Input.dispatchMouseEvent` (mousePressed/Released) по координатам пункта меню → клик уходил в title, toast не появлялся. После `element.style.animation='none'; element.style.transform='none'` на строках — `hit@copy` снова `note-row-menu-btn`, toast «скопировано».
+
+### 44.3. Исправление (коммит `293a188`)
+- `.note-row`: `animation: fadeUp 0.2s ease both` → `fadeIn 0.2s ease` (keyframes `fadeIn` двигают только `opacity`, без `transform`; без `both` не фиксирует конечный transform). Точечно — только `.note-row`, у остальных absolute-издержек нет.
+- Попутно: `toggleNoteFavorite()` искал кнопку по `.note-row-btn.star`, а в меню у избранного класс `.note-row-menu-btn.star` → `btn = null` → `TypeError` (Cannot read properties of null reading 'classList'); селектор расширен на оба класса.
+- Версии ассетов: `notes.css?v=17→18`, `app.js?v=36→37`.
+
+### 44.4. Проверка
+- `node --check` OK.
+- CDP (реальные mouse-клики): ⋯ открывает меню; Копировать → toast «скопировано» + меню закрывается; В избранное → без исключений; Редактировать → появляется `.note-edit-input`; Удалить → строка удаляется; клик вне меню — закрывает.
+- Прод `curator-v3.onrender.com` 200, `/api/health` 200, отдаёт `notes.css?v=18`, `app.js?v=37`; файлы содержат `fadeIn` и расширенный селектор.
+
+### 44.5. Вывод / правило
+Не вешать на контейнеры с `position:absolute`-вложенными попадаемыми элементами (меню, поповеры, подсказки) анимации, чей `to`-кадр оставляет ненулевой/не-`none` `transform` с `fill-mode: both`. Если анимация нужна — использовать только `opacity`, либо очищать transform по завершении, либо позиционировать меню `position:fixed` с координатами по кнопке (вне transform-контекста родителя).

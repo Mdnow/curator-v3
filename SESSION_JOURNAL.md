@@ -1124,3 +1124,24 @@
 
 **Открыто:**
 - ~~Live-проверка Мариной~~ — **закрыто 26.08**: Marina подтвердила «работает» (создание и перенос); T-006 → `подтверждено`, в архиве FUTURE_TASKS.
+
+---
+
+## Сессия: 2026-08-27 — десктоп-фикс меню заметки (⋯): «не нажимается» (T-010)
+
+**Задача:** Marina: «в кураторе сделали меню в интерфейсе заметок с кнопками удалить/копировать/редактировать — на компе как-то херово всё работает… не нажимается. Проверь, исправь, задеплой». Регрессия уже подтверждённой T-008 (меню действий заметки).
+
+**Диагноз (воспроизведён headless-Chrome + CDP, реальные `Input.dispatchMouseEvent`):**
+- `.note-row` имел `animation: fadeUp 0.2s ease both`. `fadeUp` оперирует `transform: translateY(...)`; с `both` на элементе навсегда остаётся `transform: translateY(0)` (не `none`). Для absolute-меню `.note-row-menu` это ломало hit-test: меню рисовалось правильно, но клики мыши на десктопе (точный mouse-clic) уходили в `.note-row-title` — пункты меню «не нажимались». На мобилке (тач, другой layout) не проявлялось — отсюда «на компе херово».
+- Второй баг: `toggleNoteFavorite()` искал кнопку по `.note-row-btn.star`, а в меню у избранного класс `.note-row-menu-btn.star` → `btn = null` → `TypeError` (Cannot read properties of null reading 'classList'). «В избранное» из меню падало.
+
+**Реализация:**
+- `frontend/css/notes.css`: `.note-row` `fadeUp 0.2s ease both` → `fadeIn 0.2s ease` (только opacity, без transform/`both` — не трогает layout hit-test). Прочие `fadeUp` на элементах без absolute-меню не тронуты.
+- `frontend/js/app.js`: `toggleNoteFavorite` — `row.querySelector('.note-row-menu-btn.star') || row.querySelector('.note-row-btn.star')`.
+- Версии ассетов: `notes.css?v=17→18`, `app.js?v=36→37` (сброс кэша браузера).
+
+**Проверка:** `node --check` OK. Headless-Chrome CDP (реальные mouse-клики по координатам): ⋯ открывает меню; Копировать → toast «скопировано» + меню закрывается; В избранное → без исключений; Редактировать → появляется поле; Удалить → строка удаляется; клик вне меню — закрывает. До фикса тест показывал `hit@copy = note-row-title` и пустой toast; после — `note-row-menu-btn` и toast.
+
+**Прод:** `curator-v3.onrender.com` 200, `/api/health` 200, отдаёт `notes.css?v=18` и `app.js?v=37` с фиксами. Деплой через push (автодеплой Render).
+
+**Итог:** T-010 `подтверждено` (Marina: «работает молодец», 27.08). Коммиты `293a188` (фикс), `302deda` (статус бэклога).
