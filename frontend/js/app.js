@@ -72,7 +72,7 @@ function removeCardOf(selector) {
 }
 
 // ═══ API ═══
-const FETCH_TIMEOUT_MS = 30000;
+const FETCH_TIMEOUT_MS = 60000;
 const CHAT_TIMEOUT_MS = 150000;
 
 // Понятная причина ошибки вместо сухого «ошибка»
@@ -262,7 +262,7 @@ async function loadNotes() {
   restoreDraft();
   showListLoading('#notesList');
   try {
-    const notes = await api('GET', '/notes?date=' + selectedDate);
+    const notes = await api('GET', '/notes?date=' + selectedDate, null, { timeoutMs: 60000 });
     if (!notes.length) { $('#notesList').innerHTML = ''; $('#emptyState').style.display = 'block'; return; }
     $('#emptyState').style.display = 'none';
     const decl = notes.length === 1 ? 'заметка' : (notes.length < 5 ? 'заметки' : 'заметок');
@@ -456,7 +456,7 @@ async function dailySummary() {
   el.innerHTML = '<div class="patterns-loading">думаю над итогами дня...</div>';
 
   try {
-    const notes = await api('GET', '/notes?date=' + selectedDate);
+    const notes = await api('GET', '/notes?date=' + selectedDate, null, { timeoutMs: 60000 });
 
     let summaryHtml = '<div class="summary-content">';
 
@@ -535,7 +535,7 @@ async function dailySummary() {
     el.innerHTML = summaryHtml;
 
     try {
-      const patterns = await api('GET', '/insights/daily');
+      const patterns = await api('GET', '/insights/daily', null, { timeoutMs: 60000 });
       if (patterns && (patterns.key_insight || patterns.emotional_arc)) {
         const insightHtml = `<div class="summary-section summary-insight">
           <div class="summary-label">инсайт</div>
