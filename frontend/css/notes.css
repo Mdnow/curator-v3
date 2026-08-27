@@ -268,9 +268,7 @@
 }
 .note-row-actions {
   display: flex; align-items: center; gap: 2px;
-  opacity: 0; transition: opacity 0.15s;
 }
-.note-row:hover .note-row-actions { opacity: 1; }
 
 .note-row-btn {
   background: none; border: none; color: var(--text-3);
@@ -278,11 +276,33 @@
   cursor: pointer; transition: all 0.12s; line-height: 1;
 }
 .note-row-btn:hover { color: var(--text-2); background: var(--surface); }
-.note-row-btn.copy:hover { color: var(--accent); }
 .note-row-btn.danger:hover { color: var(--danger); background: var(--danger-bg); }
 .note-row-btn.star { font-size: var(--font-md); }
 .note-row-btn.star.on { color: var(--warning); }
 .note-row-btn svg { width: 14px; height: 14px; vertical-align: middle; }
+
+/* Куратор — главная кнопка, всегда видима */
+.note-row-btn.discuss { color: var(--accent); }
+.note-row-btn.discuss:hover { color: var(--accent); background: var(--accent-bg); }
+
+/* Выпадающее меню ⋯ */
+.note-row-menu-wrap { position: relative; }
+.note-row-menu {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 50;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  min-width: 180px; padding: 4px; display: flex; flex-direction: column;
+}
+.note-row-menu[hidden] { display: none; }
+.note-row-menu-btn {
+  background: none; border: none; text-align: left; color: var(--text-1);
+  font-size: var(--font-sm); padding: 8px 12px; border-radius: var(--radius-xs);
+  cursor: pointer; transition: background 0.12s; white-space: nowrap;
+}
+.note-row-menu-btn:hover { background: var(--surface-hover); }
+.note-row-menu-btn.star.on { color: var(--warning); }
+.note-row-menu-btn.danger { color: var(--danger); }
+.note-row-menu-btn.danger:hover { background: var(--danger-bg); }
 
 /* Expanded state inside row */
 .note-row-body {

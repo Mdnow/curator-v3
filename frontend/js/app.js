@@ -282,12 +282,16 @@ async function loadNotes() {
           <span class="note-row-title" data-expand-note="${note.id}">${esc(title)}</span>
         </div>
         <div class="note-row-actions">
-          <button class="note-row-btn copy" data-copy-note="${note.id}" title="копировать">&#10697;</button>
-          <button class="note-row-btn star ${note.is_favorited ? 'on' : ''}" data-fav-note="${note.id}" title="в избранное">${note.is_favorited ? '&#9733;' : '&#9734;'}</button>
-          <button class="note-row-btn" data-edit-note="${note.id}" title="редактировать">&#9998;</button>
-          <button class="note-row-btn" data-discuss-note="${note.id}" data-discuss-text="${escAttr(note.content)}" title="обсудить с куратором">&#9671;</button>
-          <button class="note-row-btn" data-expand-note="${note.id}" title="показать текст">&#8943;</button>
-          <button class="note-row-btn danger" data-id="${note.id}" title="удалить">&#10005;</button>
+          <button class="note-row-btn discuss ${note.is_favorited ? 'discuss-on' : ''}" data-discuss-note="${note.id}" data-discuss-text="${escAttr(note.content)}" title="обсудить с куратором">&#9671;</button>
+          <div class="note-row-menu-wrap">
+            <button class="note-row-btn menu-trigger" data-menu-trigger="${note.id}" title="ещё">&#8943;</button>
+            <div class="note-row-menu" data-note-menu="${note.id}" hidden>
+              <button class="note-row-menu-btn" data-copy-note="${note.id}">Копировать</button>
+              <button class="note-row-menu-btn star ${note.is_favorited ? 'on' : ''}" data-fav-note="${note.id}">${note.is_favorited ? '★ В избранном' : '☆ В избранное'}</button>
+              <button class="note-row-menu-btn" data-edit-note="${note.id}">Редактировать</button>
+              <button class="note-row-menu-btn danger" data-id="${note.id}">Удалить</button>
+            </div>
+          </div>
         </div>
         <div class="note-row-body" hidden>
           <div class="note-row-content" data-note-text="${escAttr(note.content)}">${esc(note.content)}</div>
@@ -1642,6 +1646,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Notes
   $('#notesSection').addEventListener('click', e => {
+    const menuTrigger = e.target.closest('[data-menu-trigger]');
+    if (menuTrigger) {
+      e.stopPropagation();
+      const id = menuTrigger.dataset.menuTrigger;
+      const allMenus = document.querySelectorAll('.note-row-menu');
+      allMenus.forEach(m => { if (m.dataset.noteMenu !== id) m.setAttribute('hidden', ''); });
+      const menu = document.querySelector(`.note-row-menu[data-note-menu="${id}"]`);
+      if (menu && menu.hasAttribute('hidden')) {
+        menu.removeAttribute('hidden');
+        menu.setAttribute('data-open', '1');
+      } else if (menu) {
+        menu.setAttribute('hidden', '');
+      }
+      return;
+    }
+    const inMenu = e.target.closest('.note-row-menu');
+    if (inMenu) {
+      const menu = inMenu.closest('.note-row-menu');
+      setTimeout(() => menu.setAttribute('hidden', ''), 80);
+    }
     const copyNote = e.target.closest('[data-copy-note]');
     if (copyNote) {
       const row = copyNote.closest('.note-row');
@@ -1665,7 +1689,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const expand = e.target.closest('[data-expand-note]');
     if (expand) { toggleNoteBody(parseInt(expand.dataset.expandNote)); return; }
     const row = e.target.closest('.note-row');
-    if (row && row.dataset.noteId && !row.querySelector('.note-edit-input')) {
+    if (row && row.dataset.noteId && !row.querySelector('.note-edit-input')
+        && !e.target.closest('.note-row-menu-wrap') && !e.target.closest('.note-row-actions')) {
       toggleNoteBody(parseInt(row.dataset.noteId));
       return;
     }
@@ -1753,6 +1778,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (pop && pop.dataset.noteId) {
       pop.style.display = 'none';
       openNoteFromRef(pop.dataset.noteId);
+    }
+    if (!e.target.closest('.note-row-menu-wrap')) {
+      document.querySelectorAll('.note-row-menu[data-open]').forEach(m => m.setAttribute('hidden', ''));
     }
   });
   const noteModal = $('#noteModal');
