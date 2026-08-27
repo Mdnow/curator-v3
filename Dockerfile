@@ -9,7 +9,7 @@ WORKDIR /app
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-ARG CACHEBUST=1
+ARG CACHEBUST=2
 COPY . .
 
 EXPOSE 8000
