@@ -9,7 +9,8 @@ WORKDIR /app
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-ARG CACHEBUST=2
+RUN echo "rebuild-20260826-v2" > /tmp/.cache-bust
+
 COPY . .
 
 EXPOSE 8000
