@@ -624,7 +624,17 @@ async function loadGoals() {
     if (!active.length && !archived.length) { listEl.innerHTML = ''; emptyEl.style.display = 'block'; return; }
     emptyEl.style.display = 'none';
     const max = Math.max(1, ...active.map(g => g.source_count || 0));
-    let html = active.map(g => renderGoal(g, max)).join('');
+    const ideas = active.filter(g => g.is_pinned);
+    const goals = active.filter(g => !g.is_pinned);
+    let html = '';
+    if (ideas.length) {
+      html += `<div class="goals-section-title">идеи · ${ideas.length}</div>
+        <div class="goals-section ideas">${ideas.map(g => renderGoal(g, max, false, true)).join('')}</div>`;
+    }
+    if (goals.length) {
+      html += `<div class="goals-section-title">цели</div>
+        <div class="goals-section">${goals.map(g => renderGoal(g, max)).join('')}</div>`;
+    }
     if (archived.length) {
       html += `<div class="goals-archived-block">
         <button class="goals-archived-toggle" data-archived-toggle>прошлые направления · ${archived.length}</button>
@@ -637,7 +647,7 @@ async function loadGoals() {
   }
 }
 
-function renderGoal(goal, maxCount = 1, isArchived = false) {
+function renderGoal(goal, maxCount = 1, isArchived = false, isIdea = false) {
   const cats = (goal.categories || []).map(c => `<span class="goal-cat">${esc(c)}</span>`).join('');
   const ev = (goal.evidence || []).map(e =>
     `<button class="goal-quote" data-goal-date="${esc(e.note_date || '')}">
@@ -650,12 +660,12 @@ function renderGoal(goal, maxCount = 1, isArchived = false) {
     <div class="goal-strength-bar"><div class="goal-strength-fill" style="width:${Math.max(6, pct)}%"></div></div>
     <div class="goal-strength-label">${goal.source_count} подтверждений${goal.last_activity ? ` · последнее ${esc(goal.last_activity)}` : ''}</div>
   </div>`;
-  const pinBtn = isArchived ? '' : `<button class="goal-pin" data-goal-pin="${goal.id}" title="закрепить">${goal.is_pinned ? '&#9733;' : '&#9734;'}</button>`;
+  const pinBtn = isArchived ? '' : `<button class="goal-pin" data-goal-pin="${goal.id}" title="${goal.is_pinned ? 'убрать из идей' : 'в избранное (идеи)'}">${goal.is_pinned ? '&#9733;' : '&#9734;'}</button>`;
   const actions = isArchived
     ? `<button class="goal-activate" data-goal-activate="${goal.id}" title="вернуть в созвездие">вернуть</button>`
     : `<button class="goal-chat" data-goal-chat="${goal.id}" data-goal-chat-title="${escAttr(goal.title)}" title="поговорить о направлении">поговорить</button>
        <button class="goal-archive" data-goal-archive="${goal.id}" title="убрать из зеркала">в архив</button>`;
-  return `<div class="goal-card ${goal.is_pinned ? 'pinned' : ''} ${isArchived ? 'archived' : ''}">
+  return `<div class="goal-card ${goal.is_pinned ? 'idea' : ''} ${isArchived ? 'archived' : ''}">
     <div class="goal-header">
       ${pinBtn}
       <div class="goal-title">${esc(goal.title)}</div>
@@ -702,14 +712,15 @@ async function toggleGoalPin(id) {
   const btn = document.querySelector(`[data-goal-pin="${id}"]`);
   if (!btn) return;
   const card = btn.closest('.goal-card');
-  const wasPinned = card.classList.contains('pinned');
+  const wasPinned = card.classList.contains('idea');
   setStar(btn, !wasPinned);
-  if (card) card.classList.toggle('pinned', !wasPinned);
+  if (card) card.classList.toggle('idea', !wasPinned);
   try {
     const r = await api('POST', '/goals/' + id + '/pin');
-    if (r.is_pinned !== !wasPinned) { setStar(btn, r.is_pinned); if (card) card.classList.toggle('pinned', r.is_pinned); }
+    if (r.is_pinned !== !wasPinned) { setStar(btn, r.is_pinned); if (card) card.classList.toggle('idea', r.is_pinned); }
+    if (currentPage === 'goals') loadGoals();
   } catch (e) {
-    setStar(btn, wasPinned); if (card) card.classList.toggle('pinned', wasPinned);
+    setStar(btn, wasPinned); if (card) card.classList.toggle('idea', wasPinned);
     toast(apiErrorMessage(e));
   }
 }
