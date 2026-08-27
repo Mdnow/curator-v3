@@ -2,13 +2,16 @@
 
 import time
 from collections import defaultdict
-from fastapi import Request, HTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 
-class RateLimiter:
+class RateLimiter(BaseHTTPMiddleware):
     """Sliding-window limiter: {path_prefix: (max_requests, window_seconds)}."""
 
-    def __init__(self, limits: dict[str, tuple[int, int]] | None = None):
+    def __init__(self, app, limits: dict[str, tuple[int, int]] | None = None):
+        super().__init__(app)
         self._limits = limits or {
             "/api/login": (5, 60),
             "/api/register": (3, 60),
@@ -16,7 +19,6 @@ class RateLimiter:
             "/api/ai/save-thought": (10, 60),
         }
         self._requests: dict[str, list[float]] = defaultdict(list)
-        self._global_requests: list[float] = []
 
     def _client_ip(self, request: Request) -> str:
         forwarded = request.headers.get("x-forwarded-for")
@@ -29,25 +31,29 @@ class RateLimiter:
         while bucket and bucket[0] < cutoff:
             bucket.pop(0)
 
-    async def __call__(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next):
         path = request.url.path
         ip = self._client_ip(request)
         now = time.time()
 
-        # Global limit: 120 req/min per IP across all endpoints
         global_bucket = self._requests[f"_global:{ip}"]
         self._cleanup(global_bucket, 60)
         if len(global_bucket) >= 120:
-            raise HTTPException(429, "слишком много запросов, подожди минуту")
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "слишком много запросов, подожди минуту"},
+            )
         global_bucket.append(now)
 
-        # Per-endpoint limits
         for prefix, (max_req, window) in self._limits.items():
             if path.startswith(prefix):
                 bucket = self._requests[f"{prefix}:{ip}"]
                 self._cleanup(bucket, window)
                 if len(bucket) >= max_req:
-                    raise HTTPException(429, "слишком много запросов, подожди минуту")
+                    return JSONResponse(
+                        status_code=429,
+                        content={"detail": "слишком много запросов, подожди минуту"},
+                    )
                 bucket.append(now)
                 break
 

@@ -567,6 +567,7 @@ async function dailySummary() {
     el.innerHTML = summaryHtml;
 
   } catch (e) {
+    console.error('[dailySummary]', e);
     el.innerHTML = '<div class="patterns-loading">ошибка загрузки: ' + esc(String(e.message || e)) + '</div>';
   }
 }
