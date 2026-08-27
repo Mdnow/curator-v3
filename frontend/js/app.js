@@ -456,26 +456,15 @@ async function dailySummary() {
   el.innerHTML = '<div class="patterns-loading">думаю над итогами дня...</div>';
 
   try {
-    const [notes, patterns] = await Promise.all([
-      api('GET', '/notes?date=' + selectedDate),
-      api('GET', '/insights/daily'),
-    ]);
-    let tasks = [];
-    try { tasks = await api('GET', '/tasks?date=' + selectedDate); } catch (_) {}
+    const notes = await api('GET', '/notes?date=' + selectedDate);
 
     let summaryHtml = '<div class="summary-content">';
 
-    const totalTasks = tasks.length;
-    const doneTasks = tasks.filter(t => t.completed).length;
-
-    if (totalTasks > 0) {
-      summaryHtml += `<div class="summary-section">
-        <div class="summary-label">задач</div>
-        <div class="summary-big">${doneTasks} из ${totalTasks}</div>
+    if (notes.length === 0) {
+      summaryHtml += `<div class="summary-section summary-confirm">
+        <div class="summary-confirm-text">этот день был тихим — и это нормально</div>
       </div>`;
-    }
-
-    if (notes.length > 0) {
+    } else {
       const timeGroups = { 'утро': [], 'день': [], 'вечер': [] };
       for (const n of notes) {
         const h = new Date(parseAsUtc(n.created_at)).getUTCHours() + 3;
@@ -485,7 +474,7 @@ async function dailySummary() {
         else timeGroups['вечер'].push(n);
       }
 
-      const groupLabels = { 'утро': '6:00 - 12:00', 'день': '12:00 - 18:00', 'вечер': '18:00 - 0:00' };
+      const groupLabels = { 'утро': '6–12', 'день': '12–18', 'вечер': '18–0' };
       let timelineHtml = '';
       for (const [label, group] of Object.entries(timeGroups)) {
         if (group.length === 0) continue;
@@ -494,7 +483,7 @@ async function dailySummary() {
           return `<span class="summary-timeline-tag">${cat ? esc(cat) + ': ' : ''}${esc((n.ai_title || n.content || '').slice(0, 40))}</span>`;
         }).join('');
         timelineHtml += `<div class="summary-time-group">
-          <div class="summary-time-label">${label} <span class="summary-time-range">${groupLabels[label]} · ${group.length}</span></div>
+          <div class="summary-time-label">${label} <span class="summary-time-range">· ${group.length} ${group.length === 1 ? 'заметка' : group.length < 5 ? 'заметки' : 'заметок'}</span></div>
           <div class="summary-tags">${tags}</div>
         </div>`;
       }
@@ -530,41 +519,41 @@ async function dailySummary() {
           <div class="summary-big">${moodLabel}</div>
         </div>`;
       }
-    }
 
-    const activityScore = notes.length + doneTasks;
-    let confirmText = '';
-    if (activityScore === 0) {
-      confirmText = 'этот день был тихим — и это нормально';
-    } else if (activityScore <= 3) {
-      confirmText = 'день был рабочим — было сделано то, что нужно';
-    } else {
-      confirmText = 'день был насыщенным — многое из задуманного состоялось';
-    }
-    summaryHtml += `<div class="summary-section summary-confirm">
-      <div class="summary-confirm-text">${confirmText}</div>
-      <div class="summary-confirm-detail">${notes.length > 0 ? notes.length + ' ' + (notes.length === 1 ? 'заметка' : notes.length < 5 ? 'заметки' : 'заметок') : ''}${notes.length > 0 && doneTasks > 0 ? ', ' : ''}${doneTasks > 0 ? doneTasks + ' ' + (doneTasks === 1 ? 'задача' : doneTasks < 5 ? 'задачи' : 'задач') + ' выполнено' : ''}</div>
-    </div>`;
-
-    if (patterns.key_insight || patterns.emotional_arc) {
-      summaryHtml += `<div class="summary-section summary-insight">
-        <div class="summary-label">инсайт</div>
-        ${patterns.emotional_arc ? `<p>${esc(patterns.emotional_arc)}</p>` : ''}
-        ${patterns.key_insight ? `<p><strong>${esc(patterns.key_insight)}</strong></p>` : ''}
-        ${patterns.suggestion ? `<p class="summary-suggestion">${esc(patterns.suggestion)}</p>` : ''}
-      </div>`;
-    }
-
-    if (patterns.recurring_themes && patterns.recurring_themes.length) {
-      summaryHtml += `<div class="summary-section">
-        <div class="summary-label">повторяющиеся темы</div>
-        <div class="summary-tags">${patterns.recurring_themes.map(t => `<button class="summary-tag theme-btn" data-theme="${escAttr(t)}" title="обсудить с куратором">${esc(t)}</button>`).join('')}</div>
-        <div class="summary-theme-hint">нажми на тему — куратор поможет увидеть паттерн и связи</div>
+      const noteCount = notes.length;
+      const decl = noteCount === 1 ? 'заметка' : noteCount < 5 ? 'заметки' : 'заметок';
+      let confirmText = noteCount <= 2
+        ? 'день был рабочим — было сделано то, что нужно'
+        : 'день был насыщенным — многое из задуманного состоялось';
+      summaryHtml += `<div class="summary-section summary-confirm">
+        <div class="summary-confirm-text">${confirmText}</div>
+        <div class="summary-confirm-detail">${noteCount} ${decl}</div>
       </div>`;
     }
 
     summaryHtml += '</div>';
     el.innerHTML = summaryHtml;
+
+    try {
+      const patterns = await api('GET', '/insights/daily');
+      if (patterns && (patterns.key_insight || patterns.emotional_arc)) {
+        const insightHtml = `<div class="summary-section summary-insight">
+          <div class="summary-label">инсайт</div>
+          ${patterns.emotional_arc ? `<p>${esc(patterns.emotional_arc)}</p>` : ''}
+          ${patterns.key_insight ? `<p><strong>${esc(patterns.key_insight)}</strong></p>` : ''}
+          ${patterns.suggestion ? `<p class="summary-suggestion">${esc(patterns.suggestion)}</p>` : ''}
+        </div>`;
+        el.querySelector('.summary-content').insertAdjacentHTML('beforeend', insightHtml);
+      }
+      if (patterns && patterns.recurring_themes && patterns.recurring_themes.length) {
+        const themesHtml = `<div class="summary-section">
+          <div class="summary-label">повторяющиеся темы</div>
+          <div class="summary-tags">${patterns.recurring_themes.map(t => `<button class="summary-tag theme-btn" data-theme="${escAttr(t)}" title="обсудить с куратором">${esc(t)}</button>`).join('')}</div>
+          <div class="summary-theme-hint">нажми на тему — куратор поможет увидеть паттерн и связи</div>
+        </div>`;
+        el.querySelector('.summary-content').insertAdjacentHTML('beforeend', themesHtml);
+      }
+    } catch (_) {}
 
   } catch (e) {
     console.error('[dailySummary]', e);
