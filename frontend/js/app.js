@@ -458,106 +458,38 @@ async function dailySummary() {
   try {
     const notes = await api('GET', '/notes?date=' + selectedDate, null, { timeoutMs: 60000 });
 
-    let summaryHtml = '<div class="summary-content">';
+    let html = '<div class="summary-content">';
+    html += '<div class="summary-section summary-confirm">';
 
     if (notes.length === 0) {
-      summaryHtml += `<div class="summary-section summary-confirm">
-        <div class="summary-confirm-text">этот день был тихим — и это нормально</div>
-      </div>`;
+      html += '<div class="summary-confirm-text">этот день был тихим — и это нормально</div>';
     } else {
-      const timeGroups = { 'утро': [], 'день': [], 'вечер': [] };
-      for (const n of notes) {
-        const h = new Date(parseAsUtc(n.created_at)).getUTCHours() + 3;
-        const hour = h >= 24 ? h - 24 : h;
-        if (hour >= 6 && hour < 12) timeGroups['утро'].push(n);
-        else if (hour >= 12 && hour < 18) timeGroups['день'].push(n);
-        else timeGroups['вечер'].push(n);
-      }
+      const n = notes.length;
+      const decl = n === 1 ? 'заметка' : n < 5 ? 'заметки' : 'заметок';
+      html += `<div class="summary-confirm-text">сегодня: ${n} ${decl}</div>`;
 
-      const groupLabels = { 'утро': '6–12', 'день': '12–18', 'вечер': '18–0' };
-      let timelineHtml = '';
-      for (const [label, group] of Object.entries(timeGroups)) {
-        if (group.length === 0) continue;
-        const tags = group.map(n => {
-          const cat = n.ai_category || '';
-          return `<span class="summary-timeline-tag">${cat ? esc(cat) + ': ' : ''}${esc((n.ai_title || n.content || '').slice(0, 40))}</span>`;
-        }).join('');
-        timelineHtml += `<div class="summary-time-group">
-          <div class="summary-time-label">${label} <span class="summary-time-range">· ${group.length} ${group.length === 1 ? 'заметка' : group.length < 5 ? 'заметки' : 'заметок'}</span></div>
-          <div class="summary-tags">${tags}</div>
-        </div>`;
+      html += '<div class="summary-timeline">';
+      for (const note of notes) {
+        const title = (note.ai_title || note.content || '').split('\n')[0].trim().slice(0, 80);
+        if (title) {
+          html += `<div class="summary-timeline-item">${esc(title)}</div>`;
+        }
       }
-      if (timelineHtml) {
-        summaryHtml += `<div class="summary-section">
-          <div class="summary-label">заметки по времени</div>
-          ${timelineHtml}
-        </div>`;
-      }
+      html += '</div>';
 
-      const categories = {};
-      for (const n of notes) {
-        const cat = n.ai_category || 'другое';
-        categories[cat] = (categories[cat] || 0) + 1;
+      if (n <= 2) {
+        html += '<div class="summary-confirm-detail">день был рабочим — было сделано то, что нужно</div>';
+      } else {
+        html += '<div class="summary-confirm-detail">день был насыщенным — многое из задуманного состоялось</div>';
       }
-      const catHtml = Object.entries(categories)
-        .sort((a, b) => b[1] - a[1])
-        .map(([cat, cnt]) => `<span class="summary-tag">${esc(cat)} (${cnt})</span>`)
-        .join('');
-      if (catHtml) {
-        summaryHtml += `<div class="summary-section">
-          <div class="summary-label">темы дня</div>
-          <div class="summary-tags">${catHtml}</div>
-        </div>`;
-      }
-
-      const sentiments = notes.filter(n => n.ai_sentiment).map(n => n.ai_sentiment);
-      if (sentiments.length) {
-        const avg = sentiments.reduce((a, b) => a + b, 0) / sentiments.length;
-        const moodLabel = avg > 0.3 ? 'светлое' : avg > 0 ? 'спокойное' : avg > -0.3 ? 'нейтральное' : 'тревожное';
-        summaryHtml += `<div class="summary-section">
-          <div class="summary-label">настроение дня</div>
-          <div class="summary-big">${moodLabel}</div>
-        </div>`;
-      }
-
-      const noteCount = notes.length;
-      const decl = noteCount === 1 ? 'заметка' : noteCount < 5 ? 'заметки' : 'заметок';
-      let confirmText = noteCount <= 2
-        ? 'день был рабочим — было сделано то, что нужно'
-        : 'день был насыщенным — многое из задуманного состоялось';
-      summaryHtml += `<div class="summary-section summary-confirm">
-        <div class="summary-confirm-text">${confirmText}</div>
-        <div class="summary-confirm-detail">${noteCount} ${decl}</div>
-      </div>`;
     }
 
-    summaryHtml += '</div>';
-    el.innerHTML = summaryHtml;
-
-    try {
-      const patterns = await api('GET', '/insights/daily', null, { timeoutMs: 60000 });
-      if (patterns && (patterns.key_insight || patterns.emotional_arc)) {
-        const insightHtml = `<div class="summary-section summary-insight">
-          <div class="summary-label">инсайт</div>
-          ${patterns.emotional_arc ? `<p>${esc(patterns.emotional_arc)}</p>` : ''}
-          ${patterns.key_insight ? `<p><strong>${esc(patterns.key_insight)}</strong></p>` : ''}
-          ${patterns.suggestion ? `<p class="summary-suggestion">${esc(patterns.suggestion)}</p>` : ''}
-        </div>`;
-        el.querySelector('.summary-content').insertAdjacentHTML('beforeend', insightHtml);
-      }
-      if (patterns && patterns.recurring_themes && patterns.recurring_themes.length) {
-        const themesHtml = `<div class="summary-section">
-          <div class="summary-label">повторяющиеся темы</div>
-          <div class="summary-tags">${patterns.recurring_themes.map(t => `<button class="summary-tag theme-btn" data-theme="${escAttr(t)}" title="обсудить с куратором">${esc(t)}</button>`).join('')}</div>
-          <div class="summary-theme-hint">нажми на тему — куратор поможет увидеть паттерн и связи</div>
-        </div>`;
-        el.querySelector('.summary-content').insertAdjacentHTML('beforeend', themesHtml);
-      }
-    } catch (_) {}
+    html += '</div></div>';
+    el.innerHTML = html;
 
   } catch (e) {
     console.error('[dailySummary]', e);
-    el.innerHTML = '<div class="patterns-loading">ошибка загрузки: ' + esc(String(e.message || e)) + '</div>';
+    el.innerHTML = '<div class="patterns-loading">ошибка загрузки</div>';
   }
 }
 
