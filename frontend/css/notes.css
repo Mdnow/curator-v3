@@ -278,6 +278,7 @@
   cursor: pointer; transition: all 0.12s; line-height: 1;
 }
 .note-row-btn:hover { color: var(--text-2); background: var(--surface); }
+.note-row-btn.copy:hover { color: var(--accent); }
 .note-row-btn.danger:hover { color: var(--danger); background: var(--danger-bg); }
 .note-row-btn.star { font-size: var(--font-md); }
 .note-row-btn.star.on { color: var(--warning); }

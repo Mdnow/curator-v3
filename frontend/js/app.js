@@ -282,6 +282,7 @@ async function loadNotes() {
           <span class="note-row-title" data-expand-note="${note.id}">${esc(title)}</span>
         </div>
         <div class="note-row-actions">
+          <button class="note-row-btn copy" data-copy-note="${note.id}" title="копировать">&#10697;</button>
           <button class="note-row-btn star ${note.is_favorited ? 'on' : ''}" data-fav-note="${note.id}" title="в избранное">${note.is_favorited ? '&#9733;' : '&#9734;'}</button>
           <button class="note-row-btn" data-edit-note="${note.id}" title="редактировать">&#9998;</button>
           <button class="note-row-btn" data-discuss-note="${note.id}" data-discuss-text="${escAttr(note.content)}" title="обсудить с куратором">&#9671;</button>
@@ -1641,6 +1642,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Notes
   $('#notesSection').addEventListener('click', e => {
+    const copyNote = e.target.closest('[data-copy-note]');
+    if (copyNote) {
+      const row = copyNote.closest('.note-row');
+      const contentEl = row && row.querySelector('.note-row-content');
+      const text = contentEl ? contentEl.textContent : '';
+      copyChatText(text);
+      return;
+    }
     const fav = e.target.closest('[data-fav-note]');
     if (fav) { toggleNoteFavorite(parseInt(fav.dataset.favNote)); return; }
     const del = e.target.closest('[data-id]');
