@@ -374,7 +374,7 @@ async function saveNote() {
 async function toggleNoteFavorite(id) {
   const row = document.querySelector(`.note-row[data-note-id="${id}"]`);
   if (!row) return;
-  const btn = row.querySelector('.note-row-btn.star');
+  const btn = row.querySelector('.note-row-menu-btn.star') || row.querySelector('.note-row-btn.star');
   const wasFav = row.classList.contains('favorited');
   setStar(btn, !wasFav);
   btn.classList.toggle('on', !wasFav);

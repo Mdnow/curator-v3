@@ -242,7 +242,7 @@
   align-items: center; gap: var(--space-sm);
   padding: 7px 0; border-bottom: 1px solid var(--border);
   transition: background 0.12s; cursor: default;
-  animation: fadeUp 0.2s ease both;
+  animation: fadeIn 0.2s ease;
 }
 .note-row:last-child { border-bottom: none; }
 .note-row:hover { background: var(--surface-hover); }
