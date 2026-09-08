@@ -103,7 +103,7 @@ T-0xx. Краткое название
 ---
 
 ### T-011. Починка AI: Zen free-tier требует заголовки клиента opencode
-- **Статус**: `в работе` (код починен и проверен smoke локально: `call_ai_json` вернул `{"ok": true, "word": "камень"}`; остаётся деплой на Render и прод-проверка по согласованию)
+- **Статус**: `сделано, ждёт подтверждения` (задеплоено e03f147, прод-smoke 08.09: заметка → AI вернул саммари → удалена)
 - **Источник**: диагностика 08.09.2026 (та же причина, что T-007 в daily-os)
 - **Проблема**: Zen-шлюз отдаёт `400 MissingSessionID: "OpenCode's free tier can only be used in OpenCode"` — `backend/ai.py` слал только `Authorization` + `Content-Type`, без заголовков клиента opencode (нужны `User-Agent: opencode/6.6.1` + `x-opencode-client/session/request/project`). Плюс модели `x-preview-f-free` и `hy3-free` выпилены из каталога Zen (401 Model not supported). `big-pickle` — единственная стабильно отвечающая free-модель аккаунта (проверено 08.09, 200 OK).
 - **Как проверить**: анализ заметки / чат возвращают результат, а не «AI недоступен»; в логах нет 400 MissingSessionID; на проде (Render) функции с AI работают без смены провайдера.
