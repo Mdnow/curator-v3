@@ -1,6 +1,7 @@
 import asyncio
 import httpx
 import json
+import uuid
 from backend.config import (
     OPENROUTER_API_KEY,
     OPENROUTER_URL,
@@ -17,13 +18,15 @@ OPENROUTER_MODELS = [
     "openai/gpt-oss-20b:free",
 ]
 
+# Проверено 08.09.2026: big-pickle — единственная стабильно отвечающая
+# free-модель аккаунта (200). x-preview-f-free и hy3-free выпилены из
+# каталога Zen (401 Model not supported) — убраны. Прочие дают 403 (лимит
+# привязан к модели) — держим как резерв на случай сброса лимита.
 ZEN_MODELS = [
-    "x-preview-f-free",  # Ox Alpha Free — стабильно работает (26.08.2026)
-    "mimo-v2.5-free",  # MiMo-V2.5 Free — работает, бывают rate limits
-    "hy3-free",  # Hy3 Free — reasoning-модель, бывает 500
-    "big-pickle",  # Big Pickle — stealth, бывает rate limit / 500
-    "nemotron-3-ultra-free",  # Nemotron 3 Ultra Free — 403/500, нестабильна
-    "nemotron-3.5-lightning-free",  # 403, нестабильна
+    "big-pickle",  # stealth — стабильно отвечает (08.09.2026)
+    "mimo-v2.5-free",  # MiMo-V2.5 Free — работает, бывают 403/rate limits
+    "nemotron-3-ultra-free",  # 403/500, нестабильна — резерв
+    "nemotron-3.5-lightning-free",  # 403, нестабильна — резерв
 ]
 
 EMBED_MODEL = "nvidia/nemotron-3-embed-1b:free"
@@ -48,7 +51,9 @@ if ZEN_API_KEY:
             "url": ZEN_URL,
             "key": ZEN_API_KEY,
             "models": ZEN_MODELS,
-            "extra": {"reasoning": {"exclude": True}},
+            # без этого zen reasoning-модели тратят весь max_tokens на
+            # reasoning_content и возвращают пустой content (скилл zen-models)
+            "extra": {"thinking": {"type": "disabled"}},
         }
     )
 if OPENROUTER_API_KEY:
@@ -341,6 +346,21 @@ def _parse_json_content(content: str | None) -> dict | None:
         return None
 
 
+def zen_headers(key: str, project: str) -> dict:
+    """Заголовки клиента opencode для Zen: с 08.09.2026 одного User-Agent
+    мало — free-tier требует x-opencode-* иначе 400 MissingSessionID
+    («free tier can only be used in OpenCode»). Рецепт из скилла zen-models."""
+    return {
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+        "User-Agent": "opencode/6.6.1",
+        "x-opencode-client": "cli",
+        "x-opencode-session": str(uuid.uuid4()),
+        "x-opencode-request": "marina",
+        "x-opencode-project": project,
+    }
+
+
 async def _request_model(
     client: httpx.AsyncClient,
     provider: dict,
@@ -357,14 +377,16 @@ async def _request_model(
             "max_tokens": max_tokens,
         }
         body.update(provider["extra"])
-        r = await client.post(
-            provider["url"],
-            headers={
+        headers = (
+            zen_headers(provider["key"], "curator")
+            if provider["name"] == "zen"
+            else {
                 "Authorization": f"Bearer {provider['key']}",
                 "Content-Type": "application/json",
-            },
-            json=body,
+                "User-Agent": "opencode/latest/cli",
+            }
         )
+        r = await client.post(provider["url"], headers=headers, json=body)
         if r.status_code == 429:
             global AI_LAST_ERROR
             try:
