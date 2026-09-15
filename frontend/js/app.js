@@ -1353,9 +1353,157 @@ function tiktokCardHtml(t) {
       <span class="tiktok-card-status">${esc(label)}</span>
     </div>`;
   if (t.title) html += `<div class="tiktok-card-title">${esc(t.title)}</div>`;
+  if (t.description) html += `<div class="tiktok-card-desc">${esc(t.description)}</div>`;
+  const htags = Array.isArray(t.hashtags) ? t.hashtags : [];
+  if (htags.length) html += `<div class="tiktok-card-hashtags">${esc(htags.map(h => '#' + h).join(' '))}</div>`;
   if (t.error) html += `<div class="tiktok-card-error">${esc(t.error)}</div>`;
-  html += `<div class="tiktok-card-meta">${t.note_id ? '<span class="in-mirror">в зеркале</span>' : ''}</div></div>`;
+  html += `<div class="tiktok-card-meta">${t.note_id ? '<span class="in-mirror">в зеркале</span>' : ''}</div>`;
+
+  if (st === 'done' && t.note_id) {
+    const map = t.ai_map && typeof t.ai_map === 'object' ? t.ai_map : {};
+    const mapBlocks = [
+      ['хук', map.hook],
+      ['история', map.story],
+      ['результат', map.result],
+      ['ошибка', map.mistake],
+      ['парадокс', map.paradox],
+    ].filter(b => b[1]);
+    const missKeys = ['mistake', 'paradox'].filter(k => !map[k]);
+
+    if (t.ai_hook) {
+      html += `<div class="tiktok-hook"><div class="tiktok-hook-label">хук</div>${esc(t.ai_hook)}</div>`;
+    }
+    if (mapBlocks.length || missKeys.length) {
+      html += `<div class="tiktok-map">
+        <button class="tiktok-map-toggle" data-tiktok-map-toggle="true">карта транскрипции <span class="tiktok-map-arrow">&#9660;</span></button>
+        <div class="tiktok-map-blocks">`;
+      const labels = { hook: 'хук', story: 'история', result: 'результат', mistake: 'ошибка', paradox: 'парадокс' };
+      for (const key of ['hook', 'story', 'result', 'mistake', 'paradox']) {
+        const v = map[key];
+        if (v) {
+          html += `<div class="tiktok-map-block"><strong>${labels[key]}</strong>${esc(v)}</div>`;
+        }
+      }
+      for (const k of missKeys) {
+        html += `<div class="tiktok-map-block miss"><strong>${labels[k]}</strong>не выражен</div>`;
+      }
+      html += `</div></div>`;
+    }
+
+    html += `<div class="tiktok-skills">
+      <button class="tiktok-skill-btn" data-tiktok-skill="hooks" data-task="${t.id}">варианты хуков</button>
+      <button class="tiktok-skill-btn" data-tiktok-skill="rewrite" data-task="${t.id}">переписать</button>
+      <button class="tiktok-skill-btn" data-tiktok-skill="why_viral" data-task="${t.id}">почему виральное</button>
+      <button class="tiktok-skill-btn" data-tiktok-skill="caption" data-task="${t.id}">подпись к картинке</button>
+    </div>`;
+  }
+
+  html += `</div>`;
   return html;
+}
+
+const TIKTOK_SKILL_LABELS = {
+  hooks: 'варианты хуков',
+  rewrite: 'переписать',
+  why_viral: 'почему виральное',
+  caption: 'подпись к картинке',
+};
+let tiktokSkillState = null;
+
+async function runTikTokSkill(btn) {
+  const taskId = btn.dataset.task;
+  const skill = btn.dataset.tiktokSkill;
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = '...';
+  try {
+    const res = await api('POST', `/tiktok/${taskId}/skill`, { skill });
+    if (res.error) { toast(res.error); return; }
+    tiktokSkillState = { task_id: taskId, skill, title: TIKTOK_SKILL_LABELS[skill] || skill, res };
+    renderTikTokSkillModal();
+  } catch (e) {
+    toast(apiErrorMessage(e));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
+function renderTikTokSkillModal() {
+  const modal = $('#tiktokSkillModal');
+  const body = $('#tiktokSkillBody');
+  $('#tiktokSkillTitle').textContent = tiktokSkillState.title;
+  const res = tiktokSkillState.res;
+  if (res.variants && res.variants.length) {
+    body.innerHTML = res.variants.map(v => {
+      const style = v.style ? `<div class="style">${esc(v.style)}</div>` : '';
+      return `<div class="skill-variant">${style}<div class="text">${esc(v.caption || v.hook || '')}</div></div>`;
+    }).join('');
+  } else if (res.text) {
+    body.textContent = res.text;
+  } else {
+    body.innerHTML = '<div class="tiktok-skill-error">пустой результат</div>';
+  }
+  modal.hidden = false;
+}
+
+function closeTikTokSkillModal() {
+  $('#tiktokSkillModal').hidden = true;
+  tiktokSkillState = null;
+}
+
+function tikTokSkillCopy() {
+  const res = tiktokSkillState && tiktokSkillState.res;
+  if (!res) return;
+  let text;
+  if (res.variants && res.variants.length) {
+    text = res.variants.map(v => (v.caption || v.hook || '')).join('\n\n');
+  } else {
+    text = res.text || '';
+  }
+  copyChatText(text);
+}
+
+async function tikTokSkillSave() {
+  const state = tiktokSkillState;
+  if (!state) return;
+  const res = state.res;
+  let content;
+  if (res.variants && res.variants.length) {
+    content = res.variants.map(v => {
+      const style = v.style ? `(${v.style}) ` : '';
+      return style + (v.caption || v.hook || '');
+    }).join('\n\n');
+  } else {
+    content = res.text || '';
+  }
+  if (!content) return;
+  const label = state.title;
+  const full = `[${label} — из TikTok]\n\n` + content;
+  try {
+    await api('POST', '/notes', { content: full, note_date: selectedDate, tags: ['tiktok-skill'], mood: '' });
+    toast('сохранено в зеркало');
+    $('#tiktokSkillModal').hidden = true;
+    tiktokSkillState = null;
+  } catch (e) {
+    toast(apiErrorMessage(e));
+  }
+}
+
+function setupTikTokDelegation() {
+  $('#tiktokList').addEventListener('click', e => {
+    const mapToggle = e.target.closest('[data-tiktok-map-toggle]');
+    if (mapToggle) {
+      mapToggle.closest('.tiktok-map').classList.toggle('open');
+      return;
+    }
+    const skillBtn = e.target.closest('[data-tiktok-skill]');
+    if (skillBtn) { runTikTokSkill(skillBtn); return; }
+    const closeBtn = e.target.closest('[data-close-tiktok-skill]');
+    if (closeBtn) closeTikTokSkillModal();
+  });
+  $('#tiktokSkillCopy').addEventListener('click', tikTokSkillCopy);
+  $('#tiktokSkillSave').addEventListener('click', tikTokSkillSave);
 }
 
 async function loadTikTok() {
@@ -1824,6 +1972,7 @@ $('#archiveList').addEventListener('click', e => {
   // TikTok
   $('#tiktokBtn').addEventListener('click', submitTikTok);
   $('#tiktokUrl').addEventListener('keydown', e => { if (e.key === 'Enter') submitTikTok(); });
+  setupTikTokDelegation();
 
   // User menu
   $('#sidebarUser').addEventListener('click', logout);

@@ -15,7 +15,7 @@ from backend.config import (
 )
 from backend.crypto import encrypt
 from backend.db import get_db, get_pool
-from backend.ai import ZEN_MODELS
+from backend.ai import ZEN_MODELS, analyze_tiktok_structure
 
 # --- скачивание (из tiktok-watcher, ADR-0008/0009) ---
 
@@ -411,7 +411,13 @@ async def process_task(task_id: int, user_id: int) -> None:
     try:
         await _set_status(task_id, status="downloading")
         meta = await download_video(url, task_id)
-        await _set_status(task_id, author=meta.get("author", ""))
+        await _set_status(
+            task_id,
+            author=meta.get("author", ""),
+            description=meta.get("description", "")[:2000],
+            hashtags=json.dumps(meta.get("hashtags", []), ensure_ascii=False),
+            duration=meta.get("duration"),
+        )
 
         await _set_status(task_id, status="transcribing")
         audio_text = ""
@@ -457,6 +463,20 @@ async def process_task(task_id: int, user_id: int) -> None:
 
         await _set_status(task_id, status="saving", error=note_error)
         title = _title_for_note(meta, translation)
+
+        analysis = {"hook": "", "map": {}, "viral": {}}
+        if translation:
+            analysis = await analyze_tiktok_structure(
+                translation,
+                author=meta.get("author", ""),
+                description=meta.get("description", ""),
+            )
+        await _set_status(
+            task_id,
+            ai_hook=analysis["hook"][:3000],
+            ai_map=json.dumps(analysis["map"], ensure_ascii=False),
+            ai_viral=json.dumps(analysis["viral"], ensure_ascii=False),
+        )
         async with get_db() as db:
             note_row = await db.fetchrow(
                 """INSERT INTO notes (user_id, content_encrypted, note_date, tags, ai_title)

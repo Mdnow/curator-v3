@@ -169,6 +169,15 @@ class TikTokImportReq(BaseModel):
         return _check_len(v, "url", 8, 2000)
 
 
+class TikTokSkillReq(BaseModel):
+    skill: str
+
+    @field_validator("skill")
+    @classmethod
+    def _v_skill(cls, v: str) -> str:
+        return _check_len(v, "skill", 1, 30)
+
+
 class MemImportReq(BaseModel):
     note_id: str
     note_date: str = ""

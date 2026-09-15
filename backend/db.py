@@ -227,6 +227,25 @@ async def init_db():
         await db.execute(
             "CREATE INDEX IF NOT EXISTS idx_tiktok_user_date ON tiktok_tasks(user_id, note_date)"
         )
+        # ADR-0020: клиентские метаданные + структурный анализ видео
+        await db.execute(
+            "ALTER TABLE tiktok_tasks ADD COLUMN IF NOT EXISTS description TEXT"
+        )
+        await db.execute(
+            "ALTER TABLE tiktok_tasks ADD COLUMN IF NOT EXISTS hashtags TEXT DEFAULT '[]'"
+        )
+        await db.execute(
+            "ALTER TABLE tiktok_tasks ADD COLUMN IF NOT EXISTS duration REAL"
+        )
+        await db.execute(
+            "ALTER TABLE tiktok_tasks ADD COLUMN IF NOT EXISTS ai_hook TEXT"
+        )
+        await db.execute(
+            "ALTER TABLE tiktok_tasks ADD COLUMN IF NOT EXISTS ai_map TEXT DEFAULT '{}'"
+        )
+        await db.execute(
+            "ALTER TABLE tiktok_tasks ADD COLUMN IF NOT EXISTS ai_viral TEXT DEFAULT '{}'"
+        )
 
         # Indexes — safe to create repeatedly
         await db.execute(

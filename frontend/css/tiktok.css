@@ -33,3 +33,87 @@
 .tiktok-card-error { font-size: var(--font-sm); color: var(--danger); margin-top: var(--space-xs); }
 .tiktok-card-meta { font-size: var(--font-xs); color: var(--text-3); margin-top: var(--space-xs); }
 .tiktok-card-meta .in-mirror { color: var(--success); }
+
+/* ── ADR-0020: карта транскрипции + AI-скиллы ── */
+.tiktok-card-desc {
+  font-size: var(--font-sm); color: var(--text-2); margin-top: var(--space-sm);
+  line-height: 1.5; word-break: break-word;
+}
+.tiktok-card-hashtags { font-size: var(--font-xs); color: var(--text-3); margin-top: var(--space-xs); word-break: break-word; }
+
+.tiktok-map { margin-top: var(--space-md); border-top: 1px solid var(--border); padding-top: var(--space-sm); }
+.tiktok-map-toggle {
+  width: 100%; text-align: left; background: none; border: none; cursor: pointer;
+  color: var(--text-2); font-size: var(--font-sm); font-weight: 600;
+  padding: var(--space-xs) 0; display: flex; justify-content: space-between; align-items: center;
+}
+.tiktok-map-arrow { color: var(--text-3); font-size: var(--font-xs); transition: transform 0.15s; }
+.tiktok-map.open .tiktok-map-arrow { transform: rotate(180deg); }
+.tiktok-map-blocks { display: none; flex-direction: column; gap: var(--space-sm); margin-top: var(--space-sm); }
+.tiktok-map.open .tiktok-map-blocks { display: flex; }
+.tiktok-map-block { font-size: var(--font-sm); color: var(--text-2); line-height: 1.5; }
+.tiktok-map-block strong { color: var(--text-1); display: block; margin-bottom: 2px; font-weight: 600; }
+.tiktok-map-block.miss { opacity: 0.5; }
+.tiktok-map-block.miss strong { color: var(--text-3); font-weight: 400; }
+
+.tiktok-hook {
+  margin-top: var(--space-md); padding: var(--space-sm) var(--space-md);
+  background: var(--accent-bg); border-radius: var(--radius-sm);
+  font-size: var(--font-sm); color: var(--text-1); font-weight: 500;
+}
+.tiktok-hook-label { font-size: var(--font-xs); color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+
+.tiktok-skills { margin-top: var(--space-md); display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+.tiktok-skill-btn {
+  background: transparent; border: 1px solid var(--border); color: var(--text-2);
+  border-radius: var(--radius-sm); padding: 6px 12px; font-size: var(--font-xs); cursor: pointer;
+  transition: all 0.15s;
+}
+.tiktok-skill-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
+.tiktok-skill-btn:disabled { opacity: 0.5; cursor: default; }
+
+.tiktok-skill-modal {
+  position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center;
+  justify-content: center;
+  padding: calc(var(--space-md) + env(safe-area-inset-top, 0px))
+           calc(var(--space-md) + env(safe-area-inset-right, 0px))
+           calc(var(--space-md) + env(safe-area-inset-bottom, 0px))
+           calc(var(--space-md) + env(safe-area-inset-left, 0px));
+}
+.tiktok-skill-modal[hidden] { display: none; }
+.tiktok-skill-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.5); animation: fadeUp 0.15s ease; }
+.tiktok-skill-card {
+  position: relative; width: 100%; max-width: 560px; max-height: 80vh; max-height: 80dvh;
+  display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-md); box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+  animation: fadeUp 0.2s ease; overflow: hidden;
+}
+.tiktok-skill-header {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-sm);
+  padding: var(--space-md); border-bottom: 1px solid var(--border);
+}
+.tiktok-skill-title { color: var(--text-1); font-size: var(--font-md); font-weight: 500; line-height: 1.4; }
+.tiktok-skill-close {
+  flex-shrink: 0; background: transparent; border: none; color: var(--text-3);
+  font-size: var(--font-md); cursor: pointer; padding: 4px 8px; border-radius: var(--radius-xs);
+  transition: all 0.15s;
+}
+.tiktok-skill-close:hover { color: var(--accent); background: var(--accent-bg); }
+.tiktok-skill-body {
+  flex: 1; overflow-y: auto; padding: var(--space-md);
+  color: var(--text-2); font-size: var(--font-sm); font-weight: 300;
+  line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+}
+.tiktok-skill-body .skill-variant {
+  padding: var(--space-sm) var(--space-md); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); margin-bottom: var(--space-sm);
+}
+.tiktok-skill-body .skill-variant .style { font-size: var(--font-xs); color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.tiktok-skill-body .skill-variant .text { margin-top: 4px; }
+.tiktok-skill-footer {
+  padding: var(--space-sm) var(--space-md); border-top: 1px solid var(--border);
+  display: flex; justify-content: flex-end; gap: var(--space-sm);
+}
+.tiktok-skill-footer .btn { padding: 8px 16px; }
+.tiktok-skill-error { color: var(--danger); font-size: var(--font-sm); }
