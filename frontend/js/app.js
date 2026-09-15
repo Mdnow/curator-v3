@@ -1336,18 +1336,17 @@ const TIKTOK_STATUS_LABELS = {
   downloading: 'скачиваю видео',
   transcribing: 'расшифровываю речь',
   translating: 'перевожу на русский',
-  thinking: 'осмысляю',
-  saving: 'сохраняю в заметки',
-  done: 'в зеркале',
+  analyzing: 'анализирую структуру',
+  done: 'готово',
   error: 'ошибка',
 };
-const TIKTOK_BUSY = ['pending','downloading','transcribing','translating','thinking','saving'];
+const TIKTOK_BUSY = ['pending','downloading','transcribing','translating','analyzing'];
 
 function tiktokCardHtml(t) {
   const st = t.status || 'pending';
   const cls = st === 'done' ? 'done' : (st === 'error' ? 'error' : 'busy');
   const label = TIKTOK_STATUS_LABELS[st] || st;
-  let html = `<div class="tiktok-card ${cls}">
+  let html = `<div class="tiktok-card ${cls}" data-task="${t.id}">
     <div class="tiktok-card-head">
       <span class="tiktok-card-author">@${esc(t.author || '—')}</span>
       <span class="tiktok-card-status">${esc(label)}</span>
@@ -1359,43 +1358,52 @@ function tiktokCardHtml(t) {
   if (t.error) html += `<div class="tiktok-card-error">${esc(t.error)}</div>`;
   html += `<div class="tiktok-card-meta">${t.note_id ? '<span class="in-mirror">в зеркале</span>' : ''}</div>`;
 
-  if (st === 'done' && t.note_id) {
+  if (st === 'done') {
     const map = t.ai_map && typeof t.ai_map === 'object' ? t.ai_map : {};
-    const mapBlocks = [
-      ['хук', map.hook],
-      ['история', map.story],
-      ['результат', map.result],
-      ['ошибка', map.mistake],
-      ['парадокс', map.paradox],
-    ].filter(b => b[1]);
-    const missKeys = ['mistake', 'paradox'].filter(k => !map[k]);
+    const labels = { hook: 'хук', story: 'история', result: 'результат', mistake: 'ошибка', paradox: 'парадокс' };
+    const hasMap = ['hook', 'story', 'result', 'mistake', 'paradox'].some(k => map[k]);
 
-    if (t.ai_hook) {
-      html += `<div class="tiktok-hook"><div class="tiktok-hook-label">хук</div>${esc(t.ai_hook)}</div>`;
-    }
-    if (mapBlocks.length || missKeys.length) {
-      html += `<div class="tiktok-map">
-        <button class="tiktok-map-toggle" data-tiktok-map-toggle="true">карта транскрипции <span class="tiktok-map-arrow">&#9660;</span></button>
-        <div class="tiktok-map-blocks">`;
-      const labels = { hook: 'хук', story: 'история', result: 'результат', mistake: 'ошибка', paradox: 'парадокс' };
-      for (const key of ['hook', 'story', 'result', 'mistake', 'paradox']) {
-        const v = map[key];
-        if (v) {
-          html += `<div class="tiktok-map-block"><strong>${labels[key]}</strong>${esc(v)}</div>`;
+    if (t.content_text || hasMap || t.ai_hook) {
+      html += `<div class="tiktok-workspace">`;
+
+      if (t.content_text) {
+        html += `<div class="tiktok-text">
+          <button class="tiktok-map-toggle" data-tiktok-toggle-text="true">текст <span class="tiktok-map-arrow">&#9660;</span></button>
+          <div class="tiktok-text-body" hidden>${esc(t.content_text)}</div>
+        </div>`;
+      }
+
+      if (t.ai_hook) {
+        html += `<div class="tiktok-hook"><div class="tiktok-hook-label">хук</div>${esc(t.ai_hook)}</div>`;
+      }
+      if (hasMap) {
+        html += `<div class="tiktok-map">
+          <button class="tiktok-map-toggle" data-tiktok-map-toggle="true">карта транскрипции <span class="tiktok-map-arrow">&#9660;</span></button>
+          <div class="tiktok-map-blocks">`;
+        for (const key of ['hook', 'story', 'result', 'mistake', 'paradox']) {
+          const v = map[key];
+          if (v) {
+            html += `<div class="tiktok-map-block"><strong>${labels[key]}</strong>${esc(v)}</div>`;
+          } else {
+            html += `<div class="tiktok-map-block miss"><strong>${labels[key]}</strong>не выражен</div>`;
+          }
         }
+        html += `</div></div>`;
       }
-      for (const k of missKeys) {
-        html += `<div class="tiktok-map-block miss"><strong>${labels[k]}</strong>не выражен</div>`;
-      }
-      html += `</div></div>`;
-    }
 
-    html += `<div class="tiktok-skills">
-      <button class="tiktok-skill-btn" data-tiktok-skill="hooks" data-task="${t.id}">варианты хуков</button>
-      <button class="tiktok-skill-btn" data-tiktok-skill="rewrite" data-task="${t.id}">переписать</button>
-      <button class="tiktok-skill-btn" data-tiktok-skill="why_viral" data-task="${t.id}">почему виральное</button>
-      <button class="tiktok-skill-btn" data-tiktok-skill="caption" data-task="${t.id}">подпись к картинке</button>
-    </div>`;
+      html += `<div class="tiktok-skills">
+        <button class="tiktok-skill-btn" data-tiktok-skill="hooks" data-task="${t.id}">варианты хуков</button>
+        <button class="tiktok-skill-btn" data-tiktok-skill="rewrite" data-task="${t.id}">переписать</button>
+        <button class="tiktok-skill-btn" data-tiktok-skill="why_viral" data-task="${t.id}">почему виральное</button>
+        <button class="tiktok-skill-btn" data-tiktok-skill="caption" data-task="${t.id}">подпись к картинке</button>
+      </div>`;
+
+      if (!t.note_id) {
+        html += `<div class="tiktok-save-row"><button class="btn btn-small" data-tiktok-save="${t.id}">сохранить в зеркало</button></div>`;
+      }
+
+      html += `</div>`;
+    }
   }
 
   html += `</div>`;
@@ -1409,6 +1417,95 @@ const TIKTOK_SKILL_LABELS = {
   caption: 'подпись к картинке',
 };
 let tiktokSkillState = null;
+
+// Кэш сигнатур: список перерисовывается только при реальном изменении
+// состояния задач (иначе поллинг дёргал DOM каждые 5 секунд и клики терялись).
+let tiktokCardSignatures = null;
+
+async function loadTikTok() {
+  hideAllSections(); $('#tiktokSection').style.display = 'block';
+  const list = $('#tiktokList');
+  const empty = $('#tiktokEmpty');
+  if (!tiktokCardSignatures) {
+    list.innerHTML = '<div class="ai-status active"><div class="ai-dot"></div>загружаю...</div>';
+  }
+  try {
+    const tasks = await api('GET', '/tiktok?day=' + encodeURIComponent(selectedDate));
+    const sig = tasks.map(t => [t.id, t.status, t.note_id, t.error, t.title, t.content_text ? 'T' : '', t.ai_hook ? 'H' : '', JSON.stringify(t.ai_map || {}), JSON.stringify(t.hashtags || [])].join('|')).join(';');
+    if (sig === tiktokCardSignatures) return; // состояние не изменилось — не трогаем DOM
+    tiktokCardSignatures = sig;
+    const busy = tasks.some(t => TIKTOK_BUSY.includes(t.status));
+    if (!tasks.length) {
+      list.innerHTML = ''; empty.style.display = 'block';
+    } else {
+      list.innerHTML = tasks.map(tiktokCardHtml).join('');
+      empty.style.display = 'none';
+    }
+    if (busy) setTimeout(loadTikTok, 5000);
+  } catch (e) {
+    if (!tiktokCardSignatures) {
+      list.innerHTML = '<div class="tiktok-card error"><div class="tiktok-card-error">' + esc(e.message || 'зеркало дня недоступно') + '</div></div>';
+      empty.style.display = 'none';
+    }
+  }
+}
+
+let tiktokPollTimer = null;
+
+async function pollTikTok(taskId) {
+  clearTimeout(tiktokPollTimer);
+  try {
+    const t = await api('GET', '/tiktok/' + taskId);
+    const statusEl = $('#tiktokStatusText');
+    if (t.status === 'done' || t.status === 'error') {
+      $('#tiktokStatus').style.display = 'none';
+      toast(t.status === 'done' ? 'видео обработано' : 'ошибка обработки');
+      tiktokCardSignatures = null;
+      await loadTikTok();
+      return;
+    }
+    if (statusEl) statusEl.textContent = (TIKTOK_STATUS_LABELS[t.status] || t.status) + '...';
+    tiktokPollTimer = setTimeout(() => pollTikTok(taskId), 5000);
+  } catch (e) {
+    $('#tiktokStatus').style.display = 'none';
+    toast('зеркало дня не ответило');
+    tiktokCardSignatures = null;
+    await loadTikTok();
+  }
+}
+
+async function submitTikTok() {
+  const input = $('#tiktokUrl');
+  const url = input.value.trim();
+  if (!url) return;
+  const btn = $('#tiktokBtn');
+  btn.textContent = '...'; btn.disabled = true;
+  try {
+    const res = await api('POST', '/tiktok/import', { url, note_date: selectedDate });
+    input.value = '';
+    $('#tiktokStatus').style.display = 'flex';
+    $('#tiktokStatusText').textContent = 'в очереди...';
+    tiktokCardSignatures = null;
+    await loadTikTok();
+    pollTikTok(res.id);
+  } catch (e) {
+    $('#tiktokStatus').style.display = 'none';
+    toast(apiErrorMessage(e));
+  }
+  btn.textContent = 'СОХРАНИТЬ'; btn.disabled = false;
+}
+
+async function saveTikTokToMirror(taskId) {
+  try {
+    await api('POST', `/tiktok/${taskId}/save`, {});
+    toast('сохранено в зеркало');
+    tiktokCardSignatures = null;
+    await loadTikTok();
+    if (selectedDate === todayStr()) loadNotes();
+  } catch (e) {
+    toast(apiErrorMessage(e));
+  }
+}
 
 async function runTikTokSkill(btn) {
   const taskId = btn.dataset.task;
@@ -1492,6 +1589,11 @@ async function tikTokSkillSave() {
 
 function setupTikTokDelegation() {
   $('#tiktokList').addEventListener('click', e => {
+    const textToggle = e.target.closest('[data-tiktok-toggle-text]');
+    if (textToggle) {
+      textToggle.closest('.tiktok-text').classList.toggle('open');
+      return;
+    }
     const mapToggle = e.target.closest('[data-tiktok-map-toggle]');
     if (mapToggle) {
       mapToggle.closest('.tiktok-map').classList.toggle('open');
@@ -1499,81 +1601,13 @@ function setupTikTokDelegation() {
     }
     const skillBtn = e.target.closest('[data-tiktok-skill]');
     if (skillBtn) { runTikTokSkill(skillBtn); return; }
+    const saveBtn = e.target.closest('[data-tiktok-save]');
+    if (saveBtn) { saveTikTokToMirror(saveBtn.dataset.tiktokSave); return; }
     const closeBtn = e.target.closest('[data-close-tiktok-skill]');
     if (closeBtn) closeTikTokSkillModal();
   });
   $('#tiktokSkillCopy').addEventListener('click', tikTokSkillCopy);
   $('#tiktokSkillSave').addEventListener('click', tikTokSkillSave);
-}
-
-async function loadTikTok() {
-  hideAllSections(); $('#tiktokSection').style.display = 'block';
-  const list = $('#tiktokList');
-  const empty = $('#tiktokEmpty');
-  list.innerHTML = '<div class="ai-status active"><div class="ai-dot"></div>загружаю...</div>';
-  try {
-    const tasks = await api('GET', '/tiktok?day=' + encodeURIComponent(selectedDate));
-    const busy = tasks.some(t => TIKTOK_BUSY.includes(t.status));
-    if (!tasks.length) {
-      list.innerHTML = ''; empty.style.display = 'block';
-    } else {
-      list.innerHTML = tasks.map(tiktokCardHtml).join('');
-      empty.style.display = 'none';
-    }
-    if (busy) setTimeout(loadTikTok, 5000);
-  } catch (e) {
-    list.innerHTML = '<div class="tiktok-card error"><div class="tiktok-card-error">' + esc(e.message || 'зеркало дня недоступно') + '</div></div>';
-    empty.style.display = 'none';
-  }
-}
-
-let tiktokPollTimer = null;
-
-async function pollTikTok(taskId) {
-  clearTimeout(tiktokPollTimer);
-  try {
-    const t = await api('GET', '/tiktok/' + taskId);
-    const statusEl = $('#tiktokStatusText');
-    if (t.status === 'done') {
-      $('#tiktokStatus').style.display = 'none';
-      toast('перевод сохранён в заметки');
-      await loadTikTok();
-      if (selectedDate === todayStr()) loadNotes();
-      return;
-    }
-    if (t.status === 'error') {
-      $('#tiktokStatus').style.display = 'none';
-      toast('ошибка обработки');
-      await loadTikTok();
-      return;
-    }
-    if (statusEl) statusEl.textContent = (TIKTOK_STATUS_LABELS[t.status] || t.status) + '...';
-    tiktokPollTimer = setTimeout(() => pollTikTok(taskId), 5000);
-  } catch (e) {
-    $('#tiktokStatus').style.display = 'none';
-    toast('зеркало дня не ответило');
-    await loadTikTok();
-  }
-}
-
-async function submitTikTok() {
-  const input = $('#tiktokUrl');
-  const url = input.value.trim();
-  if (!url) return;
-  const btn = $('#tiktokBtn');
-  btn.textContent = '...'; btn.disabled = true;
-  try {
-    const res = await api('POST', '/tiktok/import', { url, note_date: selectedDate });
-    input.value = '';
-    $('#tiktokStatus').style.display = 'flex';
-    $('#tiktokStatusText').textContent = 'в очереди...';
-    await loadTikTok();
-    pollTikTok(res.id);
-  } catch (e) {
-    $('#tiktokStatus').style.display = 'none';
-    toast(apiErrorMessage(e));
-  }
-  btn.textContent = 'СОХРАНИТЬ'; btn.disabled = false;
 }
 
 // ═══ Helpers ═══

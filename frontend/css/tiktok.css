@@ -117,3 +117,15 @@
 }
 .tiktok-skill-footer .btn { padding: 8px 16px; }
 .tiktok-skill-error { color: var(--danger); font-size: var(--font-sm); }
+
+/* ── Рабочая зона (ADR-0020 rev) ── */
+.tiktok-workspace { margin-top: var(--space-md); }
+.tiktok-text { margin-bottom: var(--space-md); }
+.tiktok-text-body {
+  display: none; margin-top: var(--space-sm); white-space: pre-wrap;
+  font-size: var(--font-sm); color: var(--text-2); line-height: 1.6;
+  max-height: 400px; overflow-y: auto; border-top: 1px solid var(--border);
+  padding-top: var(--space-sm);
+}
+.tiktok-text.open .tiktok-text-body { display: block; }
+.tiktok-save-row { margin-top: var(--space-md); }

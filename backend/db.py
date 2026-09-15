@@ -246,6 +246,11 @@ async def init_db():
         await db.execute(
             "ALTER TABLE tiktok_tasks ADD COLUMN IF NOT EXISTS ai_viral TEXT DEFAULT '{}'"
         )
+        # ADR-0020 rev: текст видео живёт в задаче (рабочая зона), заметка
+        # в зеркале создаётся только по явной кнопке «сохранить в зеркало».
+        await db.execute(
+            "ALTER TABLE tiktok_tasks ADD COLUMN IF NOT EXISTS content_text TEXT"
+        )
 
         # Indexes — safe to create repeatedly
         await db.execute(

@@ -8,39 +8,25 @@ from backend.ai import (
     call_ai,
     call_ai_json,
 )
-from backend.crypto import decrypt
 from backend.db import get_db
 
 SKILL_NAMES = {"hooks", "rewrite", "why_viral", "caption"}
 
 
 async def _load_source(task_id: int, user_id: int) -> dict | None:
-    """Горячий текст задачи: перевод (заметка задачи) + контекст (хук/заголовок)."""
+    """Горячий текст задачи из рабочей зоны (content_text)."""
     async with get_db() as db:
         row = await db.fetchrow(
-            """SELECT note_id, title, author, description, ai_hook
+            """SELECT content_text, title, author, description, ai_hook
                FROM tiktok_tasks WHERE id=$1 AND user_id=$2""",
             task_id,
             user_id,
         )
-    if not row or not row["note_id"]:
+    if not row or not row["content_text"]:
         return None
-
-    async with get_db() as db:
-        note = await db.fetchrow(
-            "SELECT content_encrypted FROM notes WHERE id=$1 AND user_id=$2",
-            row["note_id"],
-            user_id,
-        )
-    if not note:
-        return None
-    try:
-        content = decrypt(note["content_encrypted"])
-    except Exception:
-        content = ""
 
     return {
-        "translation": content,
+        "translation": row["content_text"],
         "title": row["title"] or "",
         "author": row["author"] or "",
         "description": row["description"] or "",

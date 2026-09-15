@@ -14,7 +14,7 @@ from backend.config import (
     ZEN_URL,
 )
 from backend.crypto import encrypt
-from backend.db import get_db, get_pool
+from backend.db import get_db
 from backend.ai import ZEN_MODELS, analyze_tiktok_structure
 
 # --- скачивание (из tiktok-watcher, ADR-0008/0009) ---
@@ -371,23 +371,6 @@ def _title_for_note(meta: dict, translation: str) -> str:
     return first_line[:120]
 
 
-async def _embed_in_background(note_id: int, content: str, user_id: int):
-    from backend.ai import embed_text
-
-    vec = await embed_text(content)
-    if not vec:
-        return
-    pool = await get_pool()
-    async with pool.acquire() as db:
-        await db.execute(
-            """INSERT INTO note_embeddings (note_id, user_id, embedding)
-               VALUES ($1,$2,$3) ON CONFLICT (note_id) DO UPDATE SET embedding=$3""",
-            note_id,
-            user_id,
-            str(vec),
-        )
-
-
 async def _set_status(task_id: int, **fields):
     async with get_db() as db:
         await db.execute(
@@ -461,39 +444,32 @@ async def process_task(task_id: int, user_id: int) -> None:
             )
         content = content[:MAX_CONTENT_LEN]
 
-        await _set_status(task_id, status="saving", error=note_error)
+        # Текст живёт в задаче (рабочая зона вкладки «Тикток»). Заметка в
+        # зеркале создаётся только по явной кнопке «сохранить в зеркало»
+        # (ADR-0020 rev) — старый автозапис в notes убран.
         title = _title_for_note(meta, translation)
 
-        analysis = {"hook": "", "map": {}, "viral": {}}
         if translation:
+            await _set_status(task_id, status="analyzing", error="")
             analysis = await analyze_tiktok_structure(
                 translation,
                 author=meta.get("author", ""),
                 description=meta.get("description", ""),
             )
+        else:
+            analysis = {"hook": "", "map": {}, "viral": {}}
+
         await _set_status(
             task_id,
+            content_text=content,
+            title=title,
             ai_hook=analysis["hook"][:3000],
             ai_map=json.dumps(analysis["map"], ensure_ascii=False),
             ai_viral=json.dumps(analysis["viral"], ensure_ascii=False),
+            status="done",
+            note_id=None,
+            error=note_error,
         )
-        async with get_db() as db:
-            note_row = await db.fetchrow(
-                """INSERT INTO notes (user_id, content_encrypted, note_date, tags, ai_title)
-                   VALUES ($1,$2,$3,$4,$5) RETURNING id""",
-                user_id,
-                encrypt(content),
-                note_date,
-                json.dumps(["tiktok"]),
-                title,
-            )
-            note_id = note_row["id"]
-
-        asyncio.get_running_loop().create_task(
-            _embed_in_background(note_id, content, user_id)
-        )
-
-        await _set_status(task_id, status="done", note_id=note_id, title=title)
     except Exception as e:
         print(
             f"[tiktok] task {task_id} EXC {type(e).__name__}: {str(e)[:200]}",
